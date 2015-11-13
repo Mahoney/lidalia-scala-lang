@@ -68,7 +68,7 @@
         <version>3.2.2</version>
         <configuration>
           <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
-          <args><arg>-feature</arg></args>
+          <args><arg>-feature</arg><arg>-deprecation</arg></args>
         </configuration>
         <executions>
           <execution>
