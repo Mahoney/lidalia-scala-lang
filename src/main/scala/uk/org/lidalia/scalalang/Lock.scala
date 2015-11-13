@@ -9,10 +9,10 @@ final class Lock extends ResourceFactory[Unit] {
   val readLock = new LockDef(lock.readLock())
   val writeLock = new LockDef(lock.writeLock())
 
-  override def withA[T](work: (Unit) => T) = writeLock.withA(work)
+  override def using[T](work: (Unit) => T) = writeLock.using(work)
 
   final class LockDef private[Lock] (lock: java.util.concurrent.locks.Lock) extends ResourceFactory[Unit] {
-    override def withA[T](work: (Unit) => T): T = {
+    override def using[T](work: (Unit) => T): T = {
       lock.lock()
       try {
         work(())

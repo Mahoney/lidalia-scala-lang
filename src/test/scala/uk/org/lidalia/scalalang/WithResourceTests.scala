@@ -11,7 +11,7 @@ trait WithResourceTests extends FunSuiteLike {
     testTags: Tag*
   )(testFun: (A) => Unit) {
     test(testName, testTags:_*) {
-      factory.withA { resource =>
+      factory.using { resource =>
         testFun(resource)
       }
     }

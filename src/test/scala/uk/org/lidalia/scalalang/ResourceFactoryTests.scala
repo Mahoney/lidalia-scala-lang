@@ -9,7 +9,7 @@ class ResourceFactoryTests extends FunSuite {
     var open = false
     def closed = !open
 
-    override def withA[T](work: (String) => T): T = {
+    override def using[T](work: (String) => T): T = {
 
       try {
         open = true
@@ -22,7 +22,7 @@ class ResourceFactoryTests extends FunSuite {
 
   test("withA passes resource to work and returns result") {
 
-    val appended = factory.withA { string =>
+    val appended = factory.using { string =>
       assert(factory.open)
       string ++ " appended"
     }
@@ -33,7 +33,7 @@ class ResourceFactoryTests extends FunSuite {
 
   test("withA allows passed resource to be omitted and returns result") {
 
-    val result = factory.withA { () =>
+    val result = factory.using { () =>
       assert(factory.open)
       "result"
     }

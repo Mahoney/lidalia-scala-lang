@@ -9,7 +9,7 @@ object ResourceFactory {
   )(
     work: (R1, R2) => T
   ) = {
-    rf1.withA { r1 => rf2.withA { r2 =>
+    rf1.using { r1 => rf2.using { r2 =>
       work(r1, r2)
     } }
   }
@@ -19,7 +19,7 @@ object ResourceFactory {
   )(
     work: (R1, R2, R3) => T
   ): T = {
-    rf1.withA { r1 => rf2.withA { r2 => rf3.withA { r3 =>
+    rf1.using { r1 => rf2.using { r2 => rf3.using { r3 =>
       work(r1, r2, r3)
     } } }
   }
@@ -29,7 +29,7 @@ object ResourceFactory {
   )(
     work: (R1, R2, R3, R4) => T
   ): T = {
-    rf1.withA { r1 => rf2.withA { r2 => rf3.withA { r3 => rf4.withA { r4 =>
+    rf1.using { r1 => rf2.using { r2 => rf3.using { r3 => rf4.using { r4 =>
       work(r1, r2, r3, r4)
     } } } }
   }
@@ -37,10 +37,10 @@ object ResourceFactory {
 
 trait ResourceFactory[R] {
 
-  def withA[T](work: (R) => T): T
+  def using[T](work: (R) => T): T
 
-  def withA[T](work: () => T): T = {
-    withA((ignore) => work())
+  def using[T](work: () => T): T = {
+    using((ignore) => work())
   }
 }
 
