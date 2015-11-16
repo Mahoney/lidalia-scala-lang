@@ -14,7 +14,7 @@ class ManuallyClosedResource[R] private (factory: ResourceFactory[R]) {
   private val closed: CountDownLatch = new CountDownLatch(1)
 
   @volatile
-  private var re§source: Option[R] = None
+  private var resource: Option[R] = None
 
   private val thread: Thread = new Thread {
     override def run(): Unit = {
