@@ -9,9 +9,14 @@ object ResourceFactory {
   )(
     work: (R1, R2) => T
   ) = {
-    rf1.using { r1 => rf2.using { r2 =>
-      work(r1, r2)
-    } }
+    val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2)
+    try {
+      work(r1(), r2())
+    } finally {
+      val allResources = List(r1, r2)
+      allResources.foreach(_.allowToClose())
+      allResources.foreach(_.awaitClosed())
+    }
   }
 
   def withAll[T, R1, R2, R3](
@@ -19,9 +24,14 @@ object ResourceFactory {
   )(
     work: (R1, R2, R3) => T
   ): T = {
-    rf1.using { r1 => rf2.using { r2 => rf3.using { r3 =>
-      work(r1, r2, r3)
-    } } }
+    val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2); val r3 = ManuallyClosedResource(rf3)
+    try {
+      work(r1(), r2(), r3())
+    } finally {
+      val allResources = List(r1, r2, r3)
+      allResources.foreach(_.allowToClose())
+      allResources.foreach(_.awaitClosed())
+    }
   }
 
   def withAll[T, R1, R2, R3, R4](
@@ -29,9 +39,14 @@ object ResourceFactory {
   )(
     work: (R1, R2, R3, R4) => T
   ): T = {
-    rf1.using { r1 => rf2.using { r2 => rf3.using { r3 => rf4.using { r4 =>
-      work(r1, r2, r3, r4)
-    } } } }
+    val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2); val r3 = ManuallyClosedResource(rf3); val r4 = ManuallyClosedResource(rf4)
+    try {
+      work(r1(), r2(), r3(), r4())
+    } finally {
+      val allResources = List(r1, r2, r3, r4)
+      allResources.foreach(_.allowToClose())
+      allResources.foreach(_.awaitClosed())
+    }
   }
 }
 
