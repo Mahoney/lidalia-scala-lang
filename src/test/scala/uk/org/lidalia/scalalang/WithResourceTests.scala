@@ -1,7 +1,7 @@
 package uk.org.lidalia.scalalang
 
 import org.scalatest.{FunSuiteLike, Tag}
-import uk.org.lidalia.scalalang.ResourceFactory.withAll
+import uk.org.lidalia.scalalang.ResourceFactory.usingAll
 
 trait WithResourceTests extends FunSuiteLike {
 
@@ -24,7 +24,7 @@ trait WithResourceTests extends FunSuiteLike {
     testTags: Tag*
   )(testFun: (A, B) => Unit) {
     test(testName, testTags:_*) {
-      withAll(factory1, factory2) { (res1, res2) =>
+      usingAll(factory1, factory2) { (res1, res2) =>
         testFun(res1, res2)
       }
     }

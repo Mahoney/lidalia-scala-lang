@@ -1,10 +1,12 @@
 package uk.org.lidalia.scalalang
 
+import uk.org.lidalia.scalalang.ResourceFactory.usingAll
+
 object ResourceFactory {
 
   type RF[R] = ResourceFactory[R]
 
-  def withAll[T, R1, R2](
+  def usingAll[T, R1, R2](
     rf1: RF[R1], rf2: RF[R2]
   )(
     work: (R1, R2) => T
@@ -19,7 +21,7 @@ object ResourceFactory {
     }
   }
 
-  def withAll[T, R1, R2, R3](
+  def usingAll[T, R1, R2, R3](
     rf1: RF[R1], rf2: RF[R2], rf3: RF[R3]
   )(
     work: (R1, R2, R3) => T
@@ -34,7 +36,7 @@ object ResourceFactory {
     }
   }
 
-  def withAll[T, R1, R2, R3, R4](
+  def usingAll[T, R1, R2, R3, R4](
     rf1: RF[R1], rf2: RF[R2], rf3: RF[R3], rf4: RF[R4]
   )(
     work: (R1, R2, R3, R4) => T
@@ -75,4 +77,37 @@ trait Reusable {
   }
 
   def reset(): Unit = {}
+}
+
+class MultiResourceFactory2[A, B](
+  rf1: ResourceFactory[A], rf2: ResourceFactory[B]
+) extends ResourceFactory[(A, B)] {
+
+  override def using[T](work: ((A, B)) => T): T = {
+    usingAll(rf1, rf2) { (r1, r2) =>
+      work((r1, r2))
+    }
+  }
+}
+
+class MultiResourceFactory3[A, B, C](
+  rf1: ResourceFactory[A], rf2: ResourceFactory[B], rf3: ResourceFactory[C]
+) extends ResourceFactory[(A, B, C)] {
+
+  override def using[T](work: ((A, B, C)) => T): T = {
+    usingAll(rf1, rf2, rf3) { (r1, r2, r3) =>
+      work((r1, r2, r3))
+    }
+  }
+}
+
+class MultiResourceFactory4[A, B, C, D](
+  rf1: ResourceFactory[A], rf2: ResourceFactory[B], rf3: ResourceFactory[C], rf4: ResourceFactory[D]
+) extends ResourceFactory[(A, B, C, D)] {
+
+  override def using[T](work: ((A, B, C, D)) => T): T = {
+    usingAll(rf1, rf2, rf3, rf4) { (r1, r2, r3, r4) =>
+      work((r1, r2, r3, r4))
+    }
+  }
 }
