@@ -50,6 +50,16 @@ object ResourceFactory {
       allResources.foreach(_.awaitClosed())
     }
   }
+
+  def usingAll[T, R](factories: ResourceFactory[R]*)(work: List[R] => T) = {
+    val resources = factories.map(ManuallyClosedResource(_))
+    try {
+      work(resources.map(_.apply()).toList)
+    } finally {
+      resources.foreach(_.allowToClose())
+      resources.foreach(_.awaitClosed())
+    }
+  }
 }
 
 trait ResourceFactory[+R] {
