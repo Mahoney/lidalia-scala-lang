@@ -89,7 +89,7 @@ trait Reusable {
   def reset(): Unit = {}
 }
 
-class MultiResourceFactory2[A, B](
+class MultiResourceFactory2[+A, +B](
   rf1: ResourceFactory[A], rf2: ResourceFactory[B]
 ) extends ResourceFactory[(A, B)] {
 
@@ -100,7 +100,7 @@ class MultiResourceFactory2[A, B](
   }
 }
 
-class MultiResourceFactory3[A, B, C](
+class MultiResourceFactory3[+A, +B, +C](
   rf1: ResourceFactory[A], rf2: ResourceFactory[B], rf3: ResourceFactory[C]
 ) extends ResourceFactory[(A, B, C)] {
 
@@ -111,7 +111,7 @@ class MultiResourceFactory3[A, B, C](
   }
 }
 
-class MultiResourceFactory4[A, B, C, D](
+class MultiResourceFactory4[+A, +B, +C, +D](
   rf1: ResourceFactory[A], rf2: ResourceFactory[B], rf3: ResourceFactory[C], rf4: ResourceFactory[D]
 ) extends ResourceFactory[(A, B, C, D)] {
 
