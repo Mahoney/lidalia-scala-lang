@@ -2,6 +2,8 @@ package uk.org.lidalia.scalalang
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
+import uk.org.lidalia.scalalang.ResourceFactory._try
+
 final class Lock extends ResourceFactory[Unit] {
 
   private val lock = new ReentrantReadWriteLock()
@@ -14,9 +16,9 @@ final class Lock extends ResourceFactory[Unit] {
   final class LockDef private[Lock] (lock: java.util.concurrent.locks.Lock) extends ResourceFactory[Unit] {
     override def using[T](work: (Unit) => T): T = {
       lock.lock()
-      try {
+      _try {
         work(())
-      } finally {
+      } _finally {
         lock.unlock()
       }
     }

@@ -1,4 +1,5 @@
-package uk.org.lidalia.scalalang
+package uk.org.lidalia
+package scalalang
 
 import uk.org.lidalia.scalalang.ResourceFactory.usingAll
 
@@ -12,9 +13,9 @@ object ResourceFactory {
     work: (R1, R2) => T
   ) = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2)
-    try {
+    _try {
       work(r1(), r2())
-    } finally {
+    } _finally {
       val allResources = List(r1, r2)
       allResources.foreach(_.allowToClose())
       allResources.foreach(_.awaitClosed())
@@ -27,9 +28,9 @@ object ResourceFactory {
     work: (R1, R2, R3) => T
   ): T = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2); val r3 = ManuallyClosedResource(rf3)
-    try {
+    _try {
       work(r1(), r2(), r3())
-    } finally {
+    } _finally {
       val allResources = List(r1, r2, r3)
       allResources.foreach(_.allowToClose())
       allResources.foreach(_.awaitClosed())
@@ -42,9 +43,9 @@ object ResourceFactory {
     work: (R1, R2, R3, R4) => T
   ): T = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2); val r3 = ManuallyClosedResource(rf3); val r4 = ManuallyClosedResource(rf4)
-    try {
+    _try {
       work(r1(), r2(), r3(), r4())
-    } finally {
+    } _finally {
       val allResources = List(r1, r2, r3, r4)
       allResources.foreach(_.allowToClose())
       allResources.foreach(_.awaitClosed())
@@ -53,12 +54,36 @@ object ResourceFactory {
 
   def usingAll[T, R](factories: ResourceFactory[R]*)(work: List[R] => T) = {
     val resources = factories.map(ManuallyClosedResource(_))
-    try {
+    _try {
       work(resources.map(_.apply()).toList)
-    } finally {
+    } _finally {
       resources.foreach(_.allowToClose())
       resources.foreach(_.awaitClosed())
     }
+  }
+
+  def _try[T](work: => T) = new Finally(work)
+
+}
+
+private [scalalang] class Finally[T](work: => T) {
+
+  def _finally(disposal: => Unit): T = {
+    var result: ?[T] = None
+    try {
+      result = Some(work)
+    } catch {
+      case t: Throwable =>
+        try {
+          disposal
+        } catch {
+          case t2: Throwable =>
+            t.addSuppressed(t2)
+        }
+        throw t
+    }
+    disposal
+    result.get
   }
 }
 
