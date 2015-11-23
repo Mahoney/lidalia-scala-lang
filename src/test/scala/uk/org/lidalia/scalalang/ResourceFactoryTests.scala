@@ -1,9 +1,13 @@
 package uk.org.lidalia.scalalang
 
+import org.mockito.Mockito._
+import org.scalacheck.Prop.Result
 import org.scalatest.FunSuite
-import uk.org.lidalia.scalalang.ResourceFactory._try
+import org.scalatest.mock.MockitoSugar
+import org.scalatest.prop.TableDrivenPropertyChecks
+import uk.org.lidalia.scalalang.ResourceFactory.{usingAll, _try}
 
-class ResourceFactoryTests extends FunSuite {
+class ResourceFactoryTests extends FunSuite with MockitoSugar with TableDrivenPropertyChecks {
 
   object factory extends ResourceFactory[String] {
 
@@ -21,7 +25,7 @@ class ResourceFactoryTests extends FunSuite {
     }
   }
 
-  test("withA passes resource to work and returns result") {
+  test("using passes resource to work and returns result") {
 
     val appended = factory.using { string =>
       assert(factory.open)
@@ -32,7 +36,7 @@ class ResourceFactoryTests extends FunSuite {
     assert(appended == "Base string appended")
   }
 
-  test("withA allows passed resource to be omitted and returns result") {
+  test("using allows passed resource to be omitted and returns result") {
 
     val result = factory.using { () =>
       assert(factory.open)
@@ -43,7 +47,7 @@ class ResourceFactoryTests extends FunSuite {
     assert(result === "result")
   }
 
-  test("safely returns result of work") {
+  test("returns result of work") {
     val result = _try {
       "Result"
     } _finally {
@@ -51,7 +55,7 @@ class ResourceFactoryTests extends FunSuite {
     assert(result == "Result")
   }
 
-  test("safely throws exception in work") {
+  test("throws exception in work") {
     val workException = new Throwable("Work failed")
     val thrown = intercept[Throwable] {
       _try {
@@ -64,12 +68,12 @@ class ResourceFactoryTests extends FunSuite {
     assert(thrown.getCause == null)
   }
 
-  test("safely throws exception in disposal") {
+  test("throws exception in disposal") {
     val disposalException = new Throwable("Disposal failed")
     val thrown = intercept[Throwable] {
       _try {
         "result"
-      } _finally {
+      } _finally { (e) =>
         throw disposalException
       }
     }
@@ -78,13 +82,13 @@ class ResourceFactoryTests extends FunSuite {
     assert(thrown.getCause == null)
   }
 
-  test("safely suppresses exception in disposal") {
+  test("suppresses exception in disposal") {
     val workException = new Throwable("Work failed")
     val disposalException = new Throwable("Disposal failed")
     val thrown = intercept[Throwable] {
       _try {
         throw workException
-      } _finally {
+      } _finally { (e) =>
         throw disposalException
       }
     }
@@ -92,4 +96,47 @@ class ResourceFactoryTests extends FunSuite {
     assert(thrown.getSuppressed.toList == List(disposalException))
     assert(thrown.getCause == null)
   }
+
+  test("usingAll throws exception") {
+
+    val table = Table(
+      ("on use 1", "on close 1", "on use 2", "on close 2", "primary message", "suppressed messages"          ),
+      ("on use 1", "on close 1", "on use 2", "on close 2", "on use 1",        Set("on close 1")),
+      ("on use 1", "on close 1", "on use 2", null        , "on use 1",        Set("on close 1")              ),
+      ("on use 1", "on close 1", null,       "on close 2", "on use 1",        Set("on close 2", "on close 1")),
+      ("on use 1", "on close 1", null,       null        , "on use 1",        Set("on close 1")              ),
+
+      ("on use 1", null,         "on use 2", "on close 2", "on use 1",        Set("on close 2")              ),
+      ("on use 1", null,         "on use 2", null        , "on use 1",        Set()                          ),
+      ("on use 1", null,         null,       "on close 2", "on use 1",        Set("on close 2")              ),
+      ("on use 1", null,         null,       null        , "on use 1",        Set()                          ),
+
+      (null,       "on close 1", "on use 2", "on close 2", "on use 2",        Set("on close 2", "on close 1")),
+      (null,       "on close 1", "on use 2", null        , "on use 2",        Set("on close 1")              ),
+      (null,       "on close 1", null,       "on close 2", "on close 2",      Set("on close 1")              ),
+      (null,       "on close 1", null,       null        , "on close 1",      Set()                          ),
+
+      (null,       null,         "on use 2", "on close 2", "on use 2",        Set("on close 2")              ),
+      (null,       null,         "on use 2", null        , "on use 2",        Set()                          ),
+      (null,       null,         null,       "on close 2", "on close 2",      Set()                          )
+    )
+
+    forAll(table) { (onUse1, onClose1, onUse2, onClose2, primaryMessage, suppressedMessages) =>
+      val resourceFactory1 = new StubResourceFactory("Result", onUse1, onClose1)
+      val resourceFactory2 = new StubResourceFactory("Result", onUse2, onClose2)
+
+      val exception = intercept[Exception] {
+        usingAll(resourceFactory1, resourceFactory2) { (string1, string2) =>
+          string1+string2
+        }
+      }
+
+      assert(exception.getMessage == primaryMessage)
+      assert(exception.getCause == null)
+      assert(exception.getSuppressed.map(_.getMessage).toSet == suppressedMessages)
+//      assert(exception.getSuppressed.flatMap(_.getSuppressed).toList.isEmpty)
+    }
+  }
 }
+
+

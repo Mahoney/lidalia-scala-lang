@@ -16,12 +16,27 @@ class ManuallyClosedResource[R] private (factory: ResourceFactory[R]) {
   @volatile
   private var resource: Option[R] = None
 
-  private val thread: Thread = new Thread {
+  @volatile
+  private var throwable: Option[Throwable] = None
+
+  @volatile
+  private var closeThrowable: Option[Throwable] = None
+
+  private val thread: Thread = new ChildThread {
     override def run(): Unit = {
-      factory.using { resource =>
-        ManuallyClosedResource.this.resource = resource
-        ready.countDown()
-        closed.await()
+      try {
+        factory.using { resource =>
+          ManuallyClosedResource.this.resource = resource
+          ready.countDown()
+          closed.await()
+        }
+      } catch { case e: Throwable =>
+        if (ready.getCount > 0) {
+          throwable = fillInStack(e)
+          ready.countDown()
+        } else {
+          closeThrowable = fillInStack(e)
+        }
       }
     }
   }
@@ -30,17 +45,21 @@ class ManuallyClosedResource[R] private (factory: ResourceFactory[R]) {
 
   def apply(): R = {
     ready.await()
-    resource.get
+    resource.getOrElse(throw throwable.get)
   }
 
   def close() {
     allowToClose()
     awaitClosed()
+    if (closeThrowable.isDefined) throw closeThrowable.get
   }
 
   def allowToClose() = closed.countDown()
 
-  def awaitClosed() = thread.join()
+  def awaitClosed() = {
+    thread.join()
+    if (closeThrowable.isDefined) throw closeThrowable.get
+  }
 
   override def toString = super.toString + '[' + apply + ']'
 
