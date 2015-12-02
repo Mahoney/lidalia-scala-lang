@@ -93,8 +93,6 @@ private [scalalang] class Finally[T](work: => T) {
 
 trait ResourceFactory[+R] {
 
-  def map[T](work: (R) => T) = using(work)
-
   def using[T](work: (R) => T): T
 
   def using[T](work: () => T): T = {
