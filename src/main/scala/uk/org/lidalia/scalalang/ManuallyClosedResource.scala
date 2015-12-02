@@ -8,6 +8,7 @@ object ManuallyClosedResource {
   def apply[R](factory: ResourceFactory[R]) = new ManuallyClosedResource(factory)
 
 }
+
 class ManuallyClosedResource[R] private (factory: ResourceFactory[R]) {
 
   private val ready: CountDownLatch = new CountDownLatch(1)

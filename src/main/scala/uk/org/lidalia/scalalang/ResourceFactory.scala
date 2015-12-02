@@ -3,8 +3,6 @@ package scalalang
 
 import uk.org.lidalia.scalalang.ResourceFactory.usingAll
 
-import scala.util.Try
-
 object ResourceFactory {
 
   type RF[R] = ResourceFactory[R]
@@ -16,15 +14,11 @@ object ResourceFactory {
   ) = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2)
     _try {
-      (Try(r1()), Try(r2()))
       work(r1(), r2())
-    } _finally { maybe =>
+    } _finally {
       val allResources = List(r1, r2)
-      val exceptions = close2(allResources)
-      maybe.orElse(exceptions.headOption).foreach { t =>
-        exceptions.drop(1).foreach { t2 => t.addSuppressed(t2) }
-        throw t
-      }
+      allResources.foreach(_.allowToClose())
+      allResources.foreach(_.awaitClosed())
     }
   }
 
@@ -38,7 +32,8 @@ object ResourceFactory {
       work(r1(), r2(), r3())
     } _finally {
       val allResources = List(r1, r2, r3)
-      close(allResources)
+      allResources.foreach(_.allowToClose())
+      allResources.foreach(_.awaitClosed())
     }
   }
 
@@ -52,24 +47,9 @@ object ResourceFactory {
       work(r1(), r2(), r3(), r4())
     } _finally {
       val allResources = List(r1, r2, r3, r4)
-      close(allResources)
-    }
-  }
-
-  private def close(allResources: List[ManuallyClosedResource[_]]): Unit = {
-    val exceptions = close2(allResources)
-    exceptions.headOption.foreach { t =>
-      exceptions.tail.foreach { s => t.addSuppressed(s) }
-      throw t
-    }
-  }
-
-  def close2(allResources: List[ManuallyClosedResource[_]]): List[Throwable] = {
     allResources.foreach(_.allowToClose())
-    val tries: List[Try[Unit]] = allResources.map { it => Try(it.awaitClosed()) }
-    val failures: List[Try[Unit]] = tries.filter(_.isFailure)
-    val exceptions = failures.map(_.failed.get)
-    exceptions
+      allResources.foreach(_.awaitClosed())
+    }
   }
 
   def usingAll[T, R](factories: ResourceFactory[R]*)(work: List[R] => T) = {
