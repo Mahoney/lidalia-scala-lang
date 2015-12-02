@@ -4,7 +4,7 @@ import uk.org.lidalia.scalalang.ResourceFactory._try
 
 import collection.mutable
 
-class Pool[R] private [scalalang] (resourceFactory: ResourceFactory[R]) extends ResourceFactory[R] {
+class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[R]) extends ResourceFactory[R] {
 
   private val idle: mutable.Queue[ManuallyClosedResource[R]] = mutable.Queue()
   private val loaned: mutable.Set[ManuallyClosedResource[R]] = mutable.Set()
@@ -16,21 +16,37 @@ class Pool[R] private [scalalang] (resourceFactory: ResourceFactory[R]) extends 
 
     if (!open) throw new IllegalStateException("Attempting to use closed pool "+this)
 
-    val resource = loan
+    val resourceWrapper = loan
 
     _try {
-      work(resource())
+      val resource = resourceWrapper()
+      val result = _try {
+        work(resource)
+      } _finally { maybeE =>
+        maybeE match {
+          case Some(e) => resource.onError(e)
+          case _ =>
+        }
+      }
+      resource.reset()
+      result
     } _finally { maybeE =>
-      if (maybeE.isDefined) eject(resource)
-      else _return(resource)
+      if (maybeE.isDefined) {
+        eject(resourceWrapper)
+      } else {
+        _return(resourceWrapper)
+      }
     }
   }
 
   private def loan = {
+
     val existingResource = lock.writeLock.using {
       idle.dequeueFirst((x) => true)
     }
+
     val result = existingResource.getOrElse(ManuallyClosedResource(resourceFactory))
+
     lock.writeLock.using {
       loaned.add(result)
     }
@@ -52,7 +68,14 @@ class Pool[R] private [scalalang] (resourceFactory: ResourceFactory[R]) extends 
   }
 
   def open = _open
+
   def closed = !open
+
+  def size = {
+    lock.readLock.using {
+      idle.size + loaned.size
+    }
+  }
 
   private [scalalang] def close(): Unit = {
     _open = false

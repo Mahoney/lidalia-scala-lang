@@ -111,7 +111,7 @@ trait Reusable {
     Reusable.OK
   }
 
-  def onError(): Unit = {
+  def onError(exception: Throwable): Unit = {
     reset()
   }
 

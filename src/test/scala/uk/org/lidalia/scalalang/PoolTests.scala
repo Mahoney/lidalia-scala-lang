@@ -1,4 +1,5 @@
-package uk.org.lidalia.scalalang
+package uk.org.lidalia
+package scalalang
 
 import java.lang.System.currentTimeMillis
 
@@ -11,21 +12,37 @@ class PoolTests extends FunSuite {
 
   val poolFactory = PoolFactory(new TestResourceFactory)
 
+  test("result is propagated") {
+
+    poolFactory.using { pool =>
+      val result = pool.using { resource =>
+        "expected result"
+      }
+      assert(result == "expected result")
+    }
+  }
+
   test("subsequent calls reuse same object") {
 
     val capturedResources: mutable.Buffer[Resource] = mutable.Buffer()
 
     poolFactory.using { pool =>
 
-      pool.using { resource =>
-        assert(resource.open)
-        capturedResources += resource
-      }
+      assert(pool.size == 0)
 
       pool.using { resource =>
         assert(resource.open)
         capturedResources += resource
       }
+
+      assert(pool.size == 1)
+
+      pool.using { resource =>
+        assert(resource.open)
+        capturedResources += resource
+      }
+
+      assert(pool.size == 1)
     }
 
     assert(capturedResources.toSet.size == 1)
@@ -110,12 +127,16 @@ class PoolTests extends FunSuite {
   }
 
   test("pool throws exception thrown using resource and closes it") {
+
     poolFactory.using { pool =>
 
-      val exception = new RuntimeException("Oh no")
       var captured: Resource = null
+
+      val exception = new RuntimeException("Oh no")
+
       val intercepted = intercept[RuntimeException] {
         pool.using { resource =>
+          resource.dirty = true
           captured = resource
           throw exception
         }
@@ -123,6 +144,9 @@ class PoolTests extends FunSuite {
 
       assert(intercepted == exception)
       assert(captured.closed)
+      assert(captured.dirty) // reset was not called
+      assert(captured.onErrorCalled.contains(exception))
+      assert(pool.size == 0)
 
       pool.using { resource =>
         assert(resource != captured)
@@ -153,6 +177,7 @@ class PoolTests extends FunSuite {
 
       assert(intercepted == exception)
       assert(intercepted.getSuppressed.map(_.getMessage).toList == List("Failed to close"))
+      assert(pool.size == 0)
     }
   }
 
@@ -167,13 +192,99 @@ class PoolTests extends FunSuite {
 
       assert(intercepted.getMessage == "Failed to open")
       assert(intercepted.getSuppressed.map(_.getMessage).toList == List("Failed to close"))
+      assert(pool.size == 0)
+    }
+  }
+
+  test("resource is reset after use") {
+
+    poolFactory.using { pool =>
+
+      pool.using { resource =>
+        resource.dirty = true
+      }
+
+      pool.using { resource =>
+        assert(!resource.dirty)
+      }
+    }
+  }
+
+  test("pool throws exception thrown resetting resource and closes it") {
+
+    PoolFactory(new TestResourceFactory(failOnReset = true)).using { pool =>
+
+      var captured: Resource = null
+      val intercepted = intercept[RuntimeException] {
+        pool.using { resource =>
+          captured = resource
+        }
+      }
+
+      assert(intercepted.getMessage == "Failed to reset")
+      assert(captured.closed)
+      assert(pool.size == 0)
+    }
+  }
+
+  test("exception thrown closing resource after exception in reset is suppressed exception") {
+
+    PoolFactory(new TestResourceFactory(failOnReset = true, failOnClose = true)).using { pool =>
+
+      val intercepted = intercept[RuntimeException] {
+        pool.using { resource =>
+        }
+      }
+
+      assert(intercepted.getMessage == "Failed to reset")
+      assert(intercepted.getSuppressed.map(_.getMessage).toList == List("Failed to close"))
+      assert(pool.size == 0)
+    }
+  }
+
+  test("exception thrown in onError is suppressed exception") {
+
+    PoolFactory(new TestResourceFactory(failOnReset = true)).using { pool =>
+
+      val exception = new RuntimeException("Oh no")
+      val intercepted = intercept[RuntimeException] {
+        pool.using { resource =>
+          throw exception
+        }
+      }
+
+      assert(intercepted == exception)
+      assert(intercepted.getSuppressed.map(_.getMessage).toList == List("Failed to handle error"))
+      assert(pool.size == 0)
+    }
+  }
+
+  test("exception thrown in onClose is suppressed by exception in onError which is suppressed exception") {
+
+    PoolFactory(new TestResourceFactory(failOnReset = true, failOnClose = true)).using { pool =>
+
+      val exception = new RuntimeException("Oh no")
+      val intercepted = intercept[RuntimeException] {
+        pool.using { resource =>
+          throw exception
+        }
+      }
+
+      assert(intercepted == exception)
+      assert(intercepted.getSuppressed.map(_.getMessage).toList == List("Failed to handle error", "Failed to close"))
+      assert(pool.size == 0)
     }
   }
 }
 
-class TestResourceFactory(failOnOpen: Boolean = false, failOnClose: Boolean = false) extends ResourceFactory[Resource] {
+class TestResourceFactory(
+  failOnOpen: Boolean = false,
+  failOnClose: Boolean = false,
+  failOnReset: Boolean = false
+) extends ResourceFactory[Resource] {
+
   override def using[T](work: (Resource) => T): T = {
-    val resource = new Resource(failOnOpen, failOnClose)
+    val resource = new Resource(failOnOpen, failOnClose, failOnReset)
     _try {
       resource.start()
       work(resource)
@@ -183,7 +294,11 @@ class TestResourceFactory(failOnOpen: Boolean = false, failOnClose: Boolean = fa
   }
 }
 
-class Resource(failOnOpen: Boolean, failOnClose: Boolean) {
+class Resource(
+  failOnOpen: Boolean,
+  failOnClose: Boolean,
+  failOnReset: Boolean
+) extends Reusable {
 
   private var _open = false
 
@@ -201,4 +316,16 @@ class Resource(failOnOpen: Boolean, failOnClose: Boolean) {
   def open = _open
   def closed = !_open
 
+  var dirty = false
+  var onErrorCalled: ?[Throwable] = None
+
+  override def reset(): Unit = {
+    if (failOnReset) throw new RuntimeException("Failed to reset")
+    dirty = false
+  }
+
+  override def onError(throwable: Throwable): Unit = {
+    if (failOnReset) throw new RuntimeException("Failed to handle error")
+    onErrorCalled = throwable
+  }
 }
