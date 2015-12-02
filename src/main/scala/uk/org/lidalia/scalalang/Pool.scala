@@ -18,25 +18,52 @@ class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[
 
     val resourceWrapper = loan
 
-    _try {
-      val resource = resourceWrapper()
-      val result = _try {
-        work(resource)
-      } _finally { maybeE =>
-        maybeE match {
-          case Some(e) => resource.onError(e)
-          case _ =>
+    val resource = try {
+      resourceWrapper()
+    } catch {
+      case e: Throwable => eject(resourceWrapper); throw e
+    }
+
+    val result = _try {
+      work(resource)
+    } _finally { maybeE1 =>
+      if (maybeE1.isDefined) {
+        _try {
+          resource.onError(maybeE1.get)
+          _return(resourceWrapper)
+        } _finally { maybeE2 =>
+          if (maybeE2.isDefined) eject(resourceWrapper)
         }
       }
-      resource.reset()
-      result
-    } _finally { maybeE =>
-      if (maybeE.isDefined) {
-        eject(resourceWrapper)
-      } else {
-        _return(resourceWrapper)
-      }
     }
+
+    _try {
+      resource.reset()
+    } _finally { maybeE =>
+      if (maybeE.isDefined) eject(resourceWrapper)
+    }
+
+    _return(resourceWrapper)
+    result
+//    _finally { maybeE =>
+//        maybeE match {
+//          case Some(e) => {
+//            _try {
+//              resource.onError(e)
+//            } _finally { maybeE =>
+//                if (maybeE.isDefined) {
+//                  eject(resourceWrapper)
+//                } else {
+//                  _return(resourceWrapper)
+//                }
+//            }
+//          }
+//          case _ => _return(resourceWrapper)
+//        }
+//      }
+//      resource.reset()
+//      result
+//    }
   }
 
   private def loan = {

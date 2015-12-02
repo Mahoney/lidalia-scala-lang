@@ -126,7 +126,7 @@ class PoolTests extends FunSuite {
     assert(illegalState.getMessage == "Attempting to use closed pool "+captured)
   }
 
-  test("pool throws exception thrown using resource and closes it") {
+  test("pool throws exception thrown using resource and cleans it up") {
 
     poolFactory.using { pool =>
 
@@ -143,13 +143,13 @@ class PoolTests extends FunSuite {
       }
 
       assert(intercepted == exception)
-      assert(captured.closed)
+      assert(captured.open)
       assert(captured.dirty) // reset was not called
       assert(captured.onErrorCalled.contains(exception))
-      assert(pool.size == 0)
+      assert(pool.size == 1)
 
       pool.using { resource =>
-        assert(resource != captured)
+        assert(resource == captured)
       }
     }
   }
@@ -164,23 +164,6 @@ class PoolTests extends FunSuite {
     assert(intercepted.getMessage == "Failed to close")
   }
 
-  test("exception thrown closing resource after exception is suppressed exception") {
-
-    PoolFactory(new TestResourceFactory(failOnClose = true)).using { pool =>
-
-      val exception = new RuntimeException("Oh no")
-      val intercepted = intercept[RuntimeException] {
-        pool.using { resource =>
-          throw exception
-        }
-      }
-
-      assert(intercepted == exception)
-      assert(intercepted.getSuppressed.map(_.getMessage).toList == List("Failed to close"))
-      assert(pool.size == 0)
-    }
-  }
-
   test("exception thrown closing resource after failing to open is suppressed exception") {
 
     PoolFactory(new TestResourceFactory(failOnOpen = true, failOnClose = true)).using { pool =>
@@ -191,7 +174,7 @@ class PoolTests extends FunSuite {
       }
 
       assert(intercepted.getMessage == "Failed to open")
-      assert(intercepted.getSuppressed.map(_.getMessage).toList == List("Failed to close"))
+      assert(flattenSuppressed(intercepted).map(_.getMessage).toList == List("Failed to close"))
       assert(pool.size == 0)
     }
   }
@@ -237,7 +220,7 @@ class PoolTests extends FunSuite {
       }
 
       assert(intercepted.getMessage == "Failed to reset")
-      assert(intercepted.getSuppressed.map(_.getMessage).toList == List("Failed to close"))
+      assert(flattenSuppressed(intercepted).map(_.getMessage).toList == List("Failed to close"))
       assert(pool.size == 0)
     }
   }
@@ -254,7 +237,7 @@ class PoolTests extends FunSuite {
       }
 
       assert(intercepted == exception)
-      assert(intercepted.getSuppressed.map(_.getMessage).toList == List("Failed to handle error"))
+      assert(flattenSuppressed(intercepted).map(_.getMessage).toList == List("Failed to handle error"))
       assert(pool.size == 0)
     }
   }
@@ -271,9 +254,13 @@ class PoolTests extends FunSuite {
       }
 
       assert(intercepted == exception)
-      assert(intercepted.getSuppressed.map(_.getMessage).toList == List("Failed to handle error", "Failed to close"))
+      assert(flattenSuppressed(intercepted).map(_.getMessage).toList == List("Failed to handle error", "Failed to close"))
       assert(pool.size == 0)
     }
+  }
+
+  def flattenSuppressed(throwable: Throwable): Array[Throwable] = {
+    throwable.getSuppressed ++ throwable.getSuppressed.flatMap(flattenSuppressed)
   }
 }
 
