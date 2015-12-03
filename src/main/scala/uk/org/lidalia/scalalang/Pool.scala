@@ -45,25 +45,6 @@ class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[
 
     _return(resourceWrapper)
     result
-//    _finally { maybeE =>
-//        maybeE match {
-//          case Some(e) => {
-//            _try {
-//              resource.onError(e)
-//            } _finally { maybeE =>
-//                if (maybeE.isDefined) {
-//                  eject(resourceWrapper)
-//                } else {
-//                  _return(resourceWrapper)
-//                }
-//            }
-//          }
-//          case _ => _return(resourceWrapper)
-//        }
-//      }
-//      resource.reset()
-//      result
-//    }
   }
 
   private def loan = {
