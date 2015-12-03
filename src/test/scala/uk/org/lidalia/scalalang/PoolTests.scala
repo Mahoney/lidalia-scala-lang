@@ -304,15 +304,15 @@ class Resource(
   def closed = !_open
 
   var dirty = false
-  var onErrorCalled: ?[Throwable] = None
+  var onErrorCalled: ?[Exception] = None
 
   override def reset(): Unit = {
     if (failOnReset) throw new RuntimeException("Failed to reset")
     dirty = false
   }
 
-  override def onError(throwable: Throwable): Unit = {
+  override def onError(exception: Exception): Unit = {
     if (failOnReset) throw new RuntimeException("Failed to handle error")
-    onErrorCalled = throwable
+    onErrorCalled = exception
   }
 }

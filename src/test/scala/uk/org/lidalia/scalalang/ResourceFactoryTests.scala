@@ -73,7 +73,7 @@ class ResourceFactoryTests extends FunSuite with MockitoSugar with TableDrivenPr
     val thrown = intercept[Throwable] {
       _try {
         "result"
-      } _finally { (e) =>
+      } _finally {
         throw disposalException
       }
     }
@@ -88,7 +88,7 @@ class ResourceFactoryTests extends FunSuite with MockitoSugar with TableDrivenPr
     val thrown = intercept[Throwable] {
       _try {
         throw workException
-      } _finally { (e) =>
+      } _finally {
         throw disposalException
       }
     }

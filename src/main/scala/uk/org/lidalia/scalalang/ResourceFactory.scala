@@ -68,26 +68,22 @@ object ResourceFactory {
 
 private [scalalang] class Finally[T](work: => T) {
 
-  def _finally(disposal: (?[Throwable]) => Unit): T = {
+  def _finally(disposal: => Unit): T = {
     var result: ?[T] = None
     try {
       result = Some(work)
     } catch {
       case t: Throwable =>
         try {
-          disposal(t)
+          disposal
         } catch {
           case t2: Throwable =>
             t.addSuppressed(t2)
         }
         throw t
     }
-    disposal(None)
+    disposal
     result.get
-  }
-
-  def _finally(disposal: => Unit): T = {
-    _finally({ (ignored) => disposal })
   }
 }
 
@@ -111,7 +107,7 @@ trait Reusable {
     Reusable.OK
   }
 
-  def onError(exception: Throwable): Unit = {
+  def onError(exception: Exception): Unit = {
     reset()
   }
 

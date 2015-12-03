@@ -1,7 +1,5 @@
 package uk.org.lidalia.scalalang
 
-import uk.org.lidalia.scalalang.ResourceFactory._try
-
 import collection.mutable
 
 class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[R]) extends ResourceFactory[R] {
@@ -20,31 +18,51 @@ class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[
 
     val resource = try {
       resourceWrapper()
-    } catch {
-      case e: Throwable => eject(resourceWrapper); throw e
+    } catch { case e: Exception =>
+        eject(resourceWrapper, e)
+        throw e
     }
 
-    val result = _try {
+    val result = try {
       work(resource)
-    } _finally { maybeE1 =>
-      if (maybeE1.isDefined) {
-        _try {
-          resource.onError(maybeE1.get)
-          _return(resourceWrapper)
-        } _finally { maybeE2 =>
-          if (maybeE2.isDefined) eject(resourceWrapper)
-        }
-      }
+    } catch { case e: Exception =>
+        handleError(resourceWrapper, resource, e)
+        throw e
     }
 
-    _try {
+    try {
       resource.reset()
-    } _finally { maybeE =>
-      if (maybeE.isDefined) eject(resourceWrapper)
+      _return(resourceWrapper)
+    } catch { case e: Exception =>
+        eject(resourceWrapper, e)
+        throw e
     }
 
-    _return(resourceWrapper)
+
     result
+  }
+
+  private def handleError[T](resourceWrapper: ManuallyClosedResource[R], resource: R, e: Exception): Unit = {
+    try {
+      resource.onError(e)
+      _return(resourceWrapper)
+    } catch {
+      case e2: Exception =>
+        e.addSuppressed(e2)
+        eject(resourceWrapper, e2)
+    }
+  }
+
+  private def eject[T](resource: ManuallyClosedResource[R], e: Exception): Unit = {
+    try {
+      lock.writeLock.using {
+        loaned.remove(resource)
+      }
+      resource.close()
+    } catch {
+      case e2: Exception =>
+        e.addSuppressed(e2)
+    }
   }
 
   private def loan = {
@@ -66,13 +84,6 @@ class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[
       idle.enqueue(resource)
       loaned.remove(resource)
     }
-  }
-
-  private def eject(resource: ManuallyClosedResource[R]): Unit = {
-    lock.writeLock.using {
-      loaned.remove(resource)
-    }
-    resource.close()
   }
 
   def open = _open
