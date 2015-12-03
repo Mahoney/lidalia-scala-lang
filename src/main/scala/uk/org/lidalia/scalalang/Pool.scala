@@ -16,30 +16,58 @@ class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[
 
     val resourceWrapper = loan
 
-    val resource = try {
+    val resource = unwrap(resourceWrapper)
+
+    val result = doWork(work, resourceWrapper, resource)
+
+    returnResource(resourceWrapper, resource)
+
+    result
+  }
+
+  private def loan = {
+
+    val existingResource = lock.writeLock.using {
+      idle.dequeueFirst((x) => true)
+    }
+
+    val result = existingResource.getOrElse(ManuallyClosedResource(resourceFactory))
+
+    lock.writeLock.using {
+      loaned.add(result)
+    }
+    result
+  }
+
+  private def unwrap[T](resourceWrapper: ManuallyClosedResource[R]): R = {
+    try {
       resourceWrapper()
-    } catch { case e: Exception =>
+    } catch {
+      case e: Exception =>
         eject(resourceWrapper, e)
         throw e
     }
+  }
 
-    val result = try {
+  private def doWork[T](work: (R) => T, resourceWrapper: ManuallyClosedResource[R], resource: R): T = {
+    try {
       work(resource)
-    } catch { case e: Exception =>
+    } catch {
+      case e: Exception =>
         handleError(resourceWrapper, resource, e)
         throw e
     }
+  }
 
+  private def returnResource[T](resourceWrapper: ManuallyClosedResource[R], resource: R): Unit = {
     try {
       resource.reset()
       _return(resourceWrapper)
-    } catch { case e: Exception =>
+    } catch {
+      case e: Exception =>
         eject(resourceWrapper, e)
         throw e
     }
-
-
-    result
   }
 
   private def handleError[T](resourceWrapper: ManuallyClosedResource[R], resource: R, e: Exception): Unit = {
@@ -63,20 +91,6 @@ class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[
       case e2: Exception =>
         e.addSuppressed(e2)
     }
-  }
-
-  private def loan = {
-
-    val existingResource = lock.writeLock.using {
-      idle.dequeueFirst((x) => true)
-    }
-
-    val result = existingResource.getOrElse(ManuallyClosedResource(resourceFactory))
-
-    lock.writeLock.using {
-      loaned.add(result)
-    }
-    result
   }
 
   private def _return(resource: ManuallyClosedResource[R]): Unit = {
