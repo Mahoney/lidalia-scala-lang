@@ -98,7 +98,7 @@ trait ResourceFactory[+R] {
 
 object Reusable extends Enumeration {
   type State = Value
-  val BROKEN, OK, CLOSED, DIRTY = Value
+  val BROKEN, OK = Value
 }
 
 trait Reusable {

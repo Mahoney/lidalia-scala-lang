@@ -4,7 +4,8 @@ package scalalang
 class Resource(
   failOnOpen: Boolean,
   failOnClose: Boolean,
-  failOnReset: Boolean
+  failOnReset: Boolean,
+  onCheck: () => Reusable.State
 ) extends Reusable {
 
   private var _open = false
@@ -35,4 +36,6 @@ class Resource(
     if (failOnReset) throw new RuntimeException("Failed to handle error")
     onErrorCalled = exception
   }
+
+  override def check = onCheck()
 }

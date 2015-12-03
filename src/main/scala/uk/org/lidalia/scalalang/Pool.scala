@@ -20,7 +20,7 @@ class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[
 
     val result = doWork(work, resourceWrapper, resource)
 
-    returnResource(resourceWrapper, resource)
+    resetAndRestore(resourceWrapper, resource)
 
     result
   }
@@ -59,10 +59,10 @@ class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[
     }
   }
 
-  private def returnResource[T](resourceWrapper: ManuallyClosedResource[R], resource: R): Unit = {
+  private def resetAndRestore[T](resourceWrapper: ManuallyClosedResource[R], resource: R): Unit = {
     try {
       resource.reset()
-      _return(resourceWrapper)
+      restore(resourceWrapper)
     } catch {
       case e: Exception =>
         eject(resourceWrapper, e)
@@ -72,10 +72,16 @@ class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[
 
   private def handleError[T](resourceWrapper: ManuallyClosedResource[R], resource: R, e: Exception): Unit = {
     try {
+
       resource.onError(e)
-      _return(resourceWrapper)
-    } catch {
-      case e2: Exception =>
+
+      if (resource.check == Reusable.BROKEN) {
+        eject(resourceWrapper, e)
+      } else {
+        restore(resourceWrapper)
+      }
+
+    } catch { case e2: Exception =>
         e.addSuppressed(e2)
         eject(resourceWrapper, e2)
     }
@@ -93,7 +99,7 @@ class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[
     }
   }
 
-  private def _return(resource: ManuallyClosedResource[R]): Unit = {
+  private def restore(resource: ManuallyClosedResource[R]): Unit = {
     lock.writeLock.using {
       idle.enqueue(resource)
       loaned.remove(resource)

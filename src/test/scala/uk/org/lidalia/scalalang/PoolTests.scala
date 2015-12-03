@@ -150,6 +150,8 @@ class PoolTests extends fixture.FunSuite {
 
   test("if check fails after exception close and eject") { pool =>
 
+    resourceFactory.onCheck = () => Reusable.BROKEN
+
     var captured: Resource = null
 
     val exception = new RuntimeException("Oh no")
@@ -163,14 +165,66 @@ class PoolTests extends fixture.FunSuite {
     }
 
     assert(intercepted == exception)
-    assert(captured.open)
+    assert(captured.closed)
     assert(captured.dirty) // reset was not called
     assert(captured.onErrorCalled.contains(exception))
-    assert(pool.size == 1)
+    assert(pool.size == 0)
+  }
 
-    pool.using { resource =>
-      assert(resource == captured)
+  test("if closing after check fails after exception close and eject") { pool =>
+
+    resourceFactory.onCheck = () => Reusable.BROKEN
+    resourceFactory.failOnClose = true
+
+    val exception = new RuntimeException("Oh no")
+
+    val intercepted = intercept[RuntimeException] {
+      pool.using { resource =>
+        throw exception
+      }
     }
+
+    assert(intercepted == exception)
+    assert(flattenSuppressed(intercepted).map(_.getMessage).toList == List("Failed to close"))
+    assert(pool.size == 0)
+  }
+
+  test("if check throws exception after exception close and eject") { pool =>
+
+    val checkException = new RuntimeException("Failed check")
+    resourceFactory.onCheck = () => throw checkException
+
+    val exception = new RuntimeException("Oh no")
+
+    val intercepted = intercept[RuntimeException] {
+      pool.using { resource =>
+        throw exception
+      }
+    }
+
+    assert(intercepted == exception)
+    assert(flattenSuppressed(intercepted).map(_.getMessage).toList == List("Failed check"))
+    assert(pool.size == 0)
+  }
+
+  test("if check throws exception and close throws exception after exception propagate suppressed") { pool =>
+
+    val checkException = new RuntimeException("Failed check")
+    resourceFactory.onCheck = () => throw checkException
+    resourceFactory.failOnClose = true
+
+    val exception = new RuntimeException("Oh no")
+
+    val intercepted = intercept[RuntimeException] {
+      pool.using { resource =>
+        throw exception
+      }
+    }
+
+    assert(intercepted == exception)
+
+    assert(flattenSuppressed(intercepted).map(_.getMessage).toList == List("Failed check", "Failed to close"))
+    assert(pool.size == 0)
   }
 
   def flattenSuppressed(throwable: Throwable): Array[Throwable] = {
