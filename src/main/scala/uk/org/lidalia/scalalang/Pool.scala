@@ -2,104 +2,123 @@ package uk.org.lidalia.scalalang
 
 import collection.mutable
 
-class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[R]) extends ResourceFactory[R] {
+class Pool[R <: Reusable] private [scalalang] (
+  resourceFactory: ResourceFactory[R]
+) extends ResourceFactory[R] {
 
-  private val idle: mutable.Queue[ManuallyClosedResource[R]] = mutable.Queue()
-  private val loaned: mutable.Set[ManuallyClosedResource[R]] = mutable.Set()
+  type ResourceWrapper = ManuallyClosedResource[R]
+
+  private val idle: mutable.Queue[ResourceWrapper] = mutable.Queue()
+  private val loaned: mutable.Set[ResourceWrapper] = mutable.Set()
   private val lock = new Lock()
 
   @volatile var _open = true
 
-  override def using[T](work: (R) => T): T = {
+  override def using[T](
+    work: (R) => T
+  ): T = {
 
-    if (!open) throw new IllegalStateException("Attempting to use closed pool "+this)
+    if (!open) {
+      throw new IllegalStateException("Attempting to use closed pool "+this)
+    }
 
-    val resourceWrapper = loan
+    val resource = loan
 
-    val resource = unwrap(resourceWrapper)
+    checkCanOpen(resource)
 
-    val result = doWork(work, resourceWrapper, resource)
+    val result = doWork(work, resource)
 
-    resetAndRestore(resourceWrapper, resource)
+    resetAndRestore(resource)
 
     result
   }
 
   private def loan = {
 
-    val existingResource = lock.writeLock.using {
-      idle.dequeueFirst((x) => true)
-    }
-
-    val result = existingResource.getOrElse(ManuallyClosedResource(resourceFactory))
-
     lock.writeLock.using {
+
+      val existingResource = idle.dequeueFirst((x) => true)
+
+      val result = existingResource.getOrElse(
+        ManuallyClosedResource(resourceFactory)
+      )
       loaned.add(result)
+      result
     }
-    result
   }
 
-  private def unwrap[T](resourceWrapper: ManuallyClosedResource[R]): R = {
+  private def checkCanOpen[T](
+    resourceWrapper: ResourceWrapper
+  ) = {
     try {
       resourceWrapper()
-    } catch {
-      case e: Exception =>
-        eject(resourceWrapper, e)
-        throw e
+    } catch { case e: Exception =>
+      eject(resourceWrapper, e)
+      throw e
     }
   }
 
-  private def doWork[T](work: (R) => T, resourceWrapper: ManuallyClosedResource[R], resource: R): T = {
+  private def doWork[T](
+    work: (R) => T,
+    resource: ResourceWrapper
+  ) = {
     try {
-      work(resource)
-    } catch {
-      case e: Exception =>
-        handleError(resourceWrapper, resource, e)
-        throw e
+      work(resource())
+    } catch { case e: Exception =>
+      handleError(resource, e)
+      throw e
     }
   }
 
-  private def resetAndRestore[T](resourceWrapper: ManuallyClosedResource[R], resource: R): Unit = {
+  private def resetAndRestore[T](
+    resource: ResourceWrapper
+  ) = {
     try {
-      resource.reset()
-      restore(resourceWrapper)
-    } catch {
-      case e: Exception =>
-        eject(resourceWrapper, e)
-        throw e
+      resource().reset()
+      restore(resource)
+    } catch { case e: Exception =>
+      eject(resource, e)
+      throw e
     }
   }
 
-  private def handleError[T](resourceWrapper: ManuallyClosedResource[R], resource: R, e: Exception): Unit = {
+  private def handleError[T](
+    resource: ResourceWrapper,
+    e: Exception
+  ) = {
     try {
 
-      resource.onError(e)
+      resource().onError(e)
 
-      if (resource.check == Reusable.BROKEN) {
-        eject(resourceWrapper, e)
+      if (resource().check == Reusable.BROKEN) {
+        eject(resource, e)
       } else {
-        restore(resourceWrapper)
+        restore(resource)
       }
 
     } catch { case e2: Exception =>
         e.addSuppressed(e2)
-        eject(resourceWrapper, e2)
+        eject(resource, e2)
     }
   }
 
-  private def eject[T](resource: ManuallyClosedResource[R], e: Exception): Unit = {
+  private def eject[T](
+    resource: ResourceWrapper,
+    e: Exception
+  ) = {
     try {
       lock.writeLock.using {
         loaned.remove(resource)
       }
       resource.close()
-    } catch {
-      case e2: Exception =>
-        e.addSuppressed(e2)
+    } catch { case e2: Exception =>
+      e.addSuppressed(e2)
     }
   }
 
-  private def restore(resource: ManuallyClosedResource[R]): Unit = {
+  private def restore(
+    resource: ResourceWrapper
+  ) = {
     lock.writeLock.using {
       idle.enqueue(resource)
       loaned.remove(resource)
@@ -116,11 +135,13 @@ class Pool[R <: Reusable] private [scalalang] (resourceFactory: ResourceFactory[
     }
   }
 
-  private [scalalang] def close(): Unit = {
+  private [scalalang] def close() = {
     _open = false
     idle.foreach(_.allowToClose())
     loaned.foreach(_.allowToClose())
     idle.foreach(_.awaitClosed())
     loaned.foreach(_.awaitClosed())
+    idle.clear()
+    loaned.clear()
   }
 }
