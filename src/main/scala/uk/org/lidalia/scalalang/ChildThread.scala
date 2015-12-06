@@ -5,7 +5,7 @@ import java.util
 
 import org.slf4j.{Logger, LoggerFactory}
 
-class ChildThread extends Thread {
+class ChildThread(name: String) extends Thread(name) {
 
   var parentStack: Option[Array[StackTraceElement]] = None
 

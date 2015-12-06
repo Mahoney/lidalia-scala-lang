@@ -1,6 +1,7 @@
 package uk.org.lidalia
 package scalalang
 
+import java.lang.Integer.toHexString
 import java.util.concurrent.CountDownLatch
 
 object ManuallyClosedResource {
@@ -23,7 +24,7 @@ class ManuallyClosedResource[R] private (factory: ResourceFactory[R]) {
   @volatile
   private var closeThrowable: Option[Throwable] = None
 
-  private val thread: Thread = new ChildThread {
+  private val thread: Thread = new ChildThread("Thread-"+toHexString(hashCode)+"-managing-a-"+factory) {
     override def run(): Unit = {
       try {
         factory.using { resource =>
