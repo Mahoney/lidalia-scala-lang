@@ -17,4 +17,6 @@ class PoolFactory[R <: Reusable] private (resourceFactory: ResourceFactory[R]) e
       pool.close()
     }
   }
+
+  override def toString: String = "PoolFactory for "+resourceFactory
 }
