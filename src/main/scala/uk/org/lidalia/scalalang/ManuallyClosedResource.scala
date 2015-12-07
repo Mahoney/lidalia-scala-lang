@@ -24,7 +24,9 @@ class ManuallyClosedResource[R] private (factory: ResourceFactory[R]) {
   @volatile
   private var closeThrowable: Option[Throwable] = None
 
-  private val thread: Thread = new ChildThread("Thread-"+toHexString(hashCode)+"-managing-a-"+factory) {
+  private val threadName = "Thread-"+toHexString(hashCode)+"-managing-a-"+factory
+
+  private val thread: Thread = new ChildThread(threadName) {
     override def run(): Unit = {
       try {
         factory.using { resource =>
