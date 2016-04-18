@@ -1,7 +1,5 @@
 package uk.org.lidalia.scalalang
 
-import org.mockito.Mockito._
-import org.scalacheck.Prop.Result
 import org.scalatest.FunSuite
 import org.scalatest.mock.MockitoSugar
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -97,31 +95,30 @@ class ResourceFactoryTests extends FunSuite with MockitoSugar with TableDrivenPr
     assert(thrown.getCause == null)
   }
 
-  test("usingAll throws exception") {
+  val table = Table(
+    ("on use 1", "on close 1", "on use 2", "on close 2", "primary message", "suppressed messages"          ),
+    ("on use 1", "on close 1", "on use 2", "on close 2", "on use 1",        Set("on close 1")),
+    ("on use 1", "on close 1", "on use 2", null        , "on use 1",        Set("on close 1")              ),
+    ("on use 1", "on close 1", null,       "on close 2", "on use 1",        Set("on close 2", "on close 1")),
+    ("on use 1", "on close 1", null,       null        , "on use 1",        Set("on close 1")              ),
 
-    val table = Table(
-      ("on use 1", "on close 1", "on use 2", "on close 2", "primary message", "suppressed messages"          ),
-      ("on use 1", "on close 1", "on use 2", "on close 2", "on use 1",        Set("on close 1")),
-      ("on use 1", "on close 1", "on use 2", null        , "on use 1",        Set("on close 1")              ),
-      ("on use 1", "on close 1", null,       "on close 2", "on use 1",        Set("on close 2", "on close 1")),
-      ("on use 1", "on close 1", null,       null        , "on use 1",        Set("on close 1")              ),
+    ("on use 1", null,         "on use 2", "on close 2", "on use 1",        Set("on close 2")              ),
+    ("on use 1", null,         "on use 2", null        , "on use 1",        Set()                          ),
+    ("on use 1", null,         null,       "on close 2", "on use 1",        Set("on close 2")              ),
+    ("on use 1", null,         null,       null        , "on use 1",        Set()                          ),
 
-      ("on use 1", null,         "on use 2", "on close 2", "on use 1",        Set("on close 2")              ),
-      ("on use 1", null,         "on use 2", null        , "on use 1",        Set()                          ),
-      ("on use 1", null,         null,       "on close 2", "on use 1",        Set("on close 2")              ),
-      ("on use 1", null,         null,       null        , "on use 1",        Set()                          ),
+    (null,       "on close 1", "on use 2", "on close 2", "on use 2",        Set("on close 2", "on close 1")),
+    (null,       "on close 1", "on use 2", null        , "on use 2",        Set("on close 1")              ),
+    (null,       "on close 1", null,       "on close 2", "on close 2",      Set("on close 1")              ),
+    (null,       "on close 1", null,       null        , "on close 1",      Set()                          ),
 
-      (null,       "on close 1", "on use 2", "on close 2", "on use 2",        Set("on close 2", "on close 1")),
-      (null,       "on close 1", "on use 2", null        , "on use 2",        Set("on close 1")              ),
-      (null,       "on close 1", null,       "on close 2", "on close 2",      Set("on close 1")              ),
-      (null,       "on close 1", null,       null        , "on close 1",      Set()                          ),
+    (null,       null,         "on use 2", "on close 2", "on use 2",        Set("on close 2")              ),
+    (null,       null,         "on use 2", null        , "on use 2",        Set()                          ),
+    (null,       null,         null,       "on close 2", "on close 2",      Set()                          )
+  )
 
-      (null,       null,         "on use 2", "on close 2", "on use 2",        Set("on close 2")              ),
-      (null,       null,         "on use 2", null        , "on use 2",        Set()                          ),
-      (null,       null,         null,       "on close 2", "on close 2",      Set()                          )
-    )
-
-    forAll(table) { (onUse1, onClose1, onUse2, onClose2, primaryMessage, suppressedMessages) =>
+  forAll(table) { (onUse1, onClose1, onUse2, onClose2, primaryMessage, suppressedMessages) =>
+    test(s"usingAll throws exception $onUse1, $onClose1, $onUse2, $onClose2") {
       val resourceFactory1 = new StubResourceFactory("Result", onUse1, onClose1)
       val resourceFactory2 = new StubResourceFactory("Result", onUse2, onClose2)
 
@@ -134,9 +131,7 @@ class ResourceFactoryTests extends FunSuite with MockitoSugar with TableDrivenPr
       assert(exception.getMessage == primaryMessage)
       assert(exception.getCause == null)
       assert(exception.getSuppressed.map(_.getMessage).toSet == suppressedMessages)
-//      assert(exception.getSuppressed.flatMap(_.getSuppressed).toList.isEmpty)
+      assert(exception.getSuppressed.flatMap(_.getSuppressed).toList.isEmpty)
     }
   }
 }
-
-
