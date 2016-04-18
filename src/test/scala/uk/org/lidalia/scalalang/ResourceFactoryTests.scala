@@ -1,9 +1,10 @@
-package uk.org.lidalia.scalalang
+package uk.org.lidalia
+package scalalang
 
 import org.scalatest.FunSuite
 import org.scalatest.mock.MockitoSugar
 import org.scalatest.prop.TableDrivenPropertyChecks
-import uk.org.lidalia.scalalang.ResourceFactory.{usingAll, _try}
+import uk.org.lidalia.scalalang.ResourceFactory.{_try, usingAll}
 
 class ResourceFactoryTests extends FunSuite with MockitoSugar with TableDrivenPropertyChecks {
 
@@ -95,43 +96,156 @@ class ResourceFactoryTests extends FunSuite with MockitoSugar with TableDrivenPr
     assert(thrown.getCause == null)
   }
 
-  val table = Table(
-    ("on use 1", "on close 1", "on use 2", "on close 2", "primary message", "suppressed messages"          ),
-    ("on use 1", "on close 1", "on use 2", "on close 2", "on use 1",        Set("on close 1")),
-    ("on use 1", "on close 1", "on use 2", null        , "on use 1",        Set("on close 1")              ),
-    ("on use 1", "on close 1", null,       "on close 2", "on use 1",        Set("on close 2", "on close 1")),
-    ("on use 1", "on close 1", null,       null        , "on use 1",        Set("on close 1")              ),
+  val exceptionCombinations = Table(
+    ("on open 1", "on close 1", "on open 2", "on close 2", "expected"          ),
 
-    ("on use 1", null,         "on use 2", "on close 2", "on use 1",        Set("on close 2")              ),
-    ("on use 1", null,         "on use 2", null        , "on use 1",        Set()                          ),
-    ("on use 1", null,         null,       "on close 2", "on use 1",        Set("on close 2")              ),
-    ("on use 1", null,         null,       null        , "on use 1",        Set()                          ),
+    ("on open 1", "on close 1", "on open 2", "on close 2", ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on close 1"),
+                                                             ExceptionExpectation("on open 2", suppressed = List(
+                                                               ExceptionExpectation("on close 2")
+                                                             ))
+                                                           ))),
+    ("on open 1", "on close 1", "on open 2", null        , ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on close 1"),
+                                                             ExceptionExpectation("on open 2")
+                                                           ))),
+    ("on open 1", "on close 1", null,        "on close 2", ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on close 1"),
+                                                             ExceptionExpectation("on close 2")
+                                                           ))),
+    ("on open 1", "on close 1", null,        null         , ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on close 1")
+                                                           ))),
 
-    (null,       "on close 1", "on use 2", "on close 2", "on use 2",        Set("on close 2", "on close 1")),
-    (null,       "on close 1", "on use 2", null        , "on use 2",        Set("on close 1")              ),
-    (null,       "on close 1", null,       "on close 2", "on close 2",      Set("on close 1")              ),
-    (null,       "on close 1", null,       null        , "on close 1",      Set()                          ),
+    ("on open 1", null,         "on open 2", "on close 2", ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on open 2", suppressed = List(
+                                                               ExceptionExpectation("on close 2")
+                                                             ))
+                                                           ))),
+    ("on open 1", null,         "on open 2", null        , ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on open 2")
+                                                           ))),
+    ("on open 1", null,         null,        "on close 2", ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on close 2")
+                                                           ))),
+    ("on open 1", null,         null,        null        , ExceptionExpectation("on open 1")),
 
-    (null,       null,         "on use 2", "on close 2", "on use 2",        Set("on close 2")              ),
-    (null,       null,         "on use 2", null        , "on use 2",        Set()                          ),
-    (null,       null,         null,       "on close 2", "on close 2",      Set()                          )
+    (null,        "on close 1", "on open 2", "on close 2", ExceptionExpectation("on open 2", suppressed = List(
+                                                             ExceptionExpectation("on close 2"),
+                                                             ExceptionExpectation("on close 1")
+                                                           ))),
+    (null,        "on close 1", "on open 2", null        , ExceptionExpectation("on open 2", suppressed = List(
+                                                             ExceptionExpectation("on close 1")
+                                                           ))),
+    (null,        "on close 1", null,        "on close 2", ExceptionExpectation("on close 1", suppressed = List(
+                                                             ExceptionExpectation("on close 2")
+                                                           ))),
+    (null,        "on close 1", null,        null        , ExceptionExpectation("on close 1")),
+
+    (null,        null,         "on open 2", "on close 2", ExceptionExpectation("on open 2", suppressed = List(
+                                                             ExceptionExpectation("on close 2")
+                                                           ))),
+    (null,        null,         "on open 2", null        , ExceptionExpectation("on open 2")),
+    (null,        null,         null,        "on close 2", ExceptionExpectation("on close 2"))
   )
 
-  forAll(table) { (onUse1, onClose1, onUse2, onClose2, primaryMessage, suppressedMessages) =>
-    test(s"usingAll throws exception $onUse1, $onClose1, $onUse2, $onClose2") {
-      val resourceFactory1 = new StubResourceFactory("Result", onUse1, onClose1)
-      val resourceFactory2 = new StubResourceFactory("Result", onUse2, onClose2)
+  forAll(exceptionCombinations) { (onUse1, onClose1, onUse2, onClose2, expected) =>
+    test(s"usingAll correctly suppresses exceptions when work would succeed: $onUse1, $onClose1, $onUse2, $onClose2") {
+      val resourceFactory1 = StubResourceFactory("resource1", onUse1, onClose1)
+      val resourceFactory2 = StubResourceFactory("resource2", onUse2, onClose2)
 
       val exception = intercept[Exception] {
         usingAll(resourceFactory1, resourceFactory2) { (string1, string2) =>
-          string1+string2
+          // do nothing
         }
       }
 
-      assert(exception.getMessage == primaryMessage)
-      assert(exception.getCause == null)
-      assert(exception.getSuppressed.map(_.getMessage).toSet == suppressedMessages)
-      assert(exception.getSuppressed.flatMap(_.getSuppressed).toList.isEmpty)
+      assert(ExceptionExpectation(exception) == expected)
+    }
+  }
+
+  val exceptionCombinationsWhenWorkFails = Table(
+    ("on open 1", "on close 1", "on open 2", "on close 2", "expected"          ),
+
+    ("on open 1", "on close 1", "on open 2", "on close 2", ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on close 1"),
+                                                             ExceptionExpectation("on open 2", suppressed = List(
+                                                               ExceptionExpectation("on close 2")
+                                                             ))
+                                                           ))),
+    ("on open 1", "on close 1", "on open 2", null        , ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on close 1"),
+                                                             ExceptionExpectation("on open 2")
+                                                           ))),
+    ("on open 1", "on close 1", null,        "on close 2", ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on close 1"),
+                                                             ExceptionExpectation("on close 2")
+                                                           ))),
+    ("on open 1", "on close 1", null,        null         , ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on close 1")
+                                                           ))),
+
+    ("on open 1", null,         "on open 2", "on close 2", ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on open 2", suppressed = List(
+                                                               ExceptionExpectation("on close 2")
+                                                             ))
+                                                           ))),
+    ("on open 1", null,         "on open 2", null        , ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on open 2")
+                                                           ))),
+    ("on open 1", null,         null,        "on close 2", ExceptionExpectation("on open 1", suppressed = List(
+                                                             ExceptionExpectation("on close 2")
+                                                           ))),
+    ("on open 1", null,         null,        null        , ExceptionExpectation("on open 1")),
+
+    (null,        "on close 1", "on open 2", "on close 2", ExceptionExpectation("on open 2", suppressed = List(
+                                                             ExceptionExpectation("on close 2"),
+                                                             ExceptionExpectation("on close 1")
+                                                           ))),
+    (null,        "on close 1", "on open 2", null        , ExceptionExpectation("on open 2", suppressed = List(
+                                                             ExceptionExpectation("on close 1")
+                                                           ))),
+    (null,        "on close 1", null,        "on close 2", ExceptionExpectation("work failed", suppressed = List(
+                                                             ExceptionExpectation("on close 1"),
+                                                             ExceptionExpectation("on close 2")
+                                                           ))),
+    (null,        "on close 1", null,        null        , ExceptionExpectation("work failed", suppressed = List(
+                                                             ExceptionExpectation("on close 1")
+                                                           ))),
+
+    (null,        null,         "on open 2", "on close 2", ExceptionExpectation("on open 2", suppressed = List(
+                                                             ExceptionExpectation("on close 2")
+                                                           ))),
+    (null,        null,         "on open 2", null        , ExceptionExpectation("on open 2")),
+    (null,        null,         null,        "on close 2", ExceptionExpectation("work failed", suppressed = List(
+                                                             ExceptionExpectation("on close 2")
+                                                           )))
+  )
+
+  forAll(exceptionCombinationsWhenWorkFails) { (onUse1, onClose1, onUse2, onClose2, expected) =>
+    test(s"usingAll correctly suppresses exceptions when work fails: $onUse1, $onClose1, $onUse2, $onClose2") {
+      val resourceFactory1 = StubResourceFactory("resource1", onUse1, onClose1)
+      val resourceFactory2 = StubResourceFactory("resource2", onUse2, onClose2)
+
+      val exception = intercept[Exception] {
+        usingAll(resourceFactory1, resourceFactory2) { (string1, string2) =>
+          throw new Exception("work failed")
+        }
+      }
+
+      assert(ExceptionExpectation(exception) == expected)
     }
   }
 }
+
+object ExceptionExpectation {
+  def apply(t: Throwable): ExceptionExpectation = {
+    new ExceptionExpectation(
+      t.getMessage,
+      Option(t.getCause).map(ExceptionExpectation(_)),
+      t.getSuppressed.map(ExceptionExpectation(_)).toList
+    )
+  }
+}
+
+case class ExceptionExpectation(message: String, cause: ?[ExceptionExpectation] = None, suppressed: List[ExceptionExpectation] = Nil)

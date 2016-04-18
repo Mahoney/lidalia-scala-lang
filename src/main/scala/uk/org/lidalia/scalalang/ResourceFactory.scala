@@ -13,13 +13,24 @@ object ResourceFactory {
     work: (R1, R2) => T
   ) = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2)
-    _try {
-      work(r1(), r2())
-    } _finally {
-      val allResources = List(r1, r2)
+    val allResources = List(r1, r2)
+    val openResources = allResources.map { r => toEither(r()) }
+    val exceptionOnOpen = suppressed(openResources.flatMap { _.left.toOption })
+
+
+    var result: ?[T] = None
+    try {
+      exceptionOnOpen.foreach { throw _ }
+      result = Some(work(r1(), r2()))
+    } catch { case t: Throwable =>
       allResources.foreach(_.allowToClose())
-      allResources.foreach(_.awaitClosed())
+      val exceptionsOnClose = allResources.map{ r => toEither(r.awaitClosed()) }.flatMap { _.left.toOption }
+      suppressed(t :: exceptionsOnClose).foreach { throw _ }
     }
+    allResources.foreach(_.allowToClose())
+    val exceptionsOnClose = allResources.map{ r => toEither(r.awaitClosed()) }.flatMap { _.left.toOption }
+    suppressed(exceptionsOnClose).foreach { throw _ }
+    result.get
   }
 
   def usingAll[T, R1, R2, R3](
@@ -64,6 +75,26 @@ object ResourceFactory {
 
   def _try[T](work: => T) = new Finally(work)
 
+  def toEither[T](work: => T): Either[Throwable, T] = {
+    try {
+      Right(work)
+    } catch {
+      case e: Throwable => Left(e)
+    }
+  }
+
+  def suppressed(throwables: Traversable[Throwable]): ?[Throwable] = {
+    throwables.foldLeft(None: ?[Throwable]) { (primary, throwable) =>
+      primary match {
+        case None =>
+          Some(throwable)
+        case Some(e) =>
+          e.addSuppressed(throwable)
+          primary
+      }
+    }
+  }
+
 }
 
 private [scalalang] class Finally[T](work: => T) {
@@ -72,15 +103,13 @@ private [scalalang] class Finally[T](work: => T) {
     var result: ?[T] = None
     try {
       result = Some(work)
-    } catch {
-      case t: Throwable =>
-        try {
-          disposal
-        } catch {
-          case t2: Throwable =>
-            t.addSuppressed(t2)
-        }
-        throw t
+    } catch { case t: Throwable =>
+      try {
+        disposal
+      } catch { case t2: Throwable =>
+        t.addSuppressed(t2)
+      }
+      throw t
     }
     disposal
     result.get

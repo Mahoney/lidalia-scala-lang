@@ -15,7 +15,7 @@ class ManuallyClosedResourceTests extends FunSuite {
 
   test("throws exception on use") {
     val resource = ManuallyClosedResource(new StubResourceFactory(
-      throwWhenUsed = "on use"
+      throwWhenOpened = "on use"
     ))
 
     try {

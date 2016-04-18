@@ -2,16 +2,16 @@ package uk.org.lidalia.scalalang
 
 import ResourceFactory._try
 
-class StubResourceFactory (
-  result: String = "Result",
-  throwWhenUsed: String = null,
+case class StubResourceFactory[R] (
+  resource: R = "Result",
+  throwWhenOpened: String = null,
   throwWhenClosed: String = null
-) extends ResourceFactory[String] {
+) extends ResourceFactory[R] {
 
-  override def using[T](work: (String) => T): T = {
+  override def using[T](work: (R) => T): T = {
     _try {
-      if (throwWhenUsed != null) throw new RuntimeException(throwWhenUsed)
-      work(result)
+      if (throwWhenOpened != null) throw new RuntimeException(throwWhenOpened)
+      work(resource)
     } _finally {
       if (throwWhenClosed != null) throw new RuntimeException(throwWhenClosed)
     }
