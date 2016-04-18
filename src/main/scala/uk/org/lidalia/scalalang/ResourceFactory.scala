@@ -3,6 +3,8 @@ package scalalang
 
 import uk.org.lidalia.scalalang.ResourceFactory.usingAll
 
+import scala.util.Try
+
 object ResourceFactory {
 
   type RF[R] = ResourceFactory[R]
@@ -14,23 +16,24 @@ object ResourceFactory {
   ) = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2)
     val allResources = List(r1, r2)
-    val openResources = allResources.map { r => toEither(r()) }
-    val exceptionOnOpen = suppressed(openResources.flatMap { _.left.toOption })
-
+    val exceptionsOnOpen = allResources.flatMap { r => Try(r()).failed.toOption }
 
     var result: ?[T] = None
     try {
-      exceptionOnOpen.foreach { throw _ }
+      suppressed(exceptionsOnOpen).foreach { throw _ }
       result = Some(work(r1(), r2()))
     } catch { case t: Throwable =>
-      allResources.foreach(_.allowToClose())
-      val exceptionsOnClose = allResources.map{ r => toEither(r.awaitClosed()) }.flatMap { _.left.toOption }
-      suppressed(t :: exceptionsOnClose).foreach { throw _ }
+      closeAll(allResources, t)
     }
-    allResources.foreach(_.allowToClose())
-    val exceptionsOnClose = allResources.map{ r => toEither(r.awaitClosed()) }.flatMap { _.left.toOption }
-    suppressed(exceptionsOnClose).foreach { throw _ }
+    closeAll(allResources)
     result.get
+  }
+
+  def closeAll(allResources: List[ManuallyClosedResource[_]], t: ?[Throwable] = None): Unit = {
+    allResources.foreach(_.allowToClose())
+    val exceptionsOnClose = allResources.flatMap { r => Try(r.awaitClosed()).failed.toOption }
+    val allExceptions = t.map { _ :: exceptionsOnClose }.getOrElse(exceptionsOnClose)
+    suppressed(allExceptions).foreach { throw _ }
   }
 
   def usingAll[T, R1, R2, R3](
@@ -74,14 +77,6 @@ object ResourceFactory {
   }
 
   def _try[T](work: => T) = new Finally(work)
-
-  def toEither[T](work: => T): Either[Throwable, T] = {
-    try {
-      Right(work)
-    } catch {
-      case e: Throwable => Left(e)
-    }
-  }
 
   def suppressed(throwables: Traversable[Throwable]): ?[Throwable] = {
     throwables.foldLeft(None: ?[Throwable]) { (primary, throwable) =>
