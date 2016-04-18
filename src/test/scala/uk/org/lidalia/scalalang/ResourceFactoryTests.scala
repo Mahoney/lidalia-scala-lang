@@ -73,7 +73,7 @@ class ResourceFactoryTests extends FunSuite with MockitoSugar with TableDrivenPr
       _try {
         "result"
       } _finally {
-        throw disposalException
+        _throw(disposalException)
       }
     }
     assert(thrown == disposalException)
@@ -88,13 +88,15 @@ class ResourceFactoryTests extends FunSuite with MockitoSugar with TableDrivenPr
       _try {
         throw workException
       } _finally {
-        throw disposalException
+        _throw(disposalException)
       }
     }
     assert(thrown == workException)
     assert(thrown.getSuppressed.toList == List(disposalException))
     assert(thrown.getCause == null)
   }
+
+  def _throw(t: Throwable): Unit = throw t
 
   val exceptionCombinations = Table(
     ("on open 1", "on close 1", "on open 2", "on close 2", "expected"          ),

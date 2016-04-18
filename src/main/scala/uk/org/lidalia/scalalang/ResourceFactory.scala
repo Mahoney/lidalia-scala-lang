@@ -16,22 +16,23 @@ object ResourceFactory {
   ) = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2)
     val allResources = List(r1, r2)
-    val exceptionsOnOpen = allResources.flatMap { r => Try(r()).failed.toOption }
+    val exceptionsOnOpen = exceptionsOn(allResources) { _() }
 
-    var result: ?[T] = None
-    try {
+    _try {
       suppressed(exceptionsOnOpen).foreach { throw _ }
-      result = Some(work(r1(), r2()))
-    } catch { case t: Throwable =>
+      Some(work(r1(), r2()))
+    } _finally { t: ?[Throwable] =>
       closeAll(allResources, t)
     }
-    closeAll(allResources)
-    result.get
   }
 
-  def closeAll(allResources: List[ManuallyClosedResource[_]], t: ?[Throwable] = None): Unit = {
+  private def exceptionsOn(allResources: List[ManuallyClosedResource[_]])(action: (ManuallyClosedResource[_]) => Any): List[Throwable] = {
+    allResources.flatMap { r => Try(action(r)).failed.toOption }
+  }
+
+  private def closeAll(allResources: List[ManuallyClosedResource[_]], t: ?[Throwable]): Unit = {
     allResources.foreach(_.allowToClose())
-    val exceptionsOnClose = allResources.flatMap { r => Try(r.awaitClosed()).failed.toOption }
+    val exceptionsOnClose = exceptionsOn(allResources) { _.awaitClosed() }
     val allExceptions = t.map { _ :: exceptionsOnClose }.getOrElse(exceptionsOnClose)
     suppressed(allExceptions).foreach { throw _ }
   }
@@ -61,7 +62,7 @@ object ResourceFactory {
       work(r1(), r2(), r3(), r4())
     } _finally {
       val allResources = List(r1, r2, r3, r4)
-    allResources.foreach(_.allowToClose())
+      allResources.foreach(_.allowToClose())
       allResources.foreach(_.awaitClosed())
     }
   }
@@ -95,18 +96,22 @@ object ResourceFactory {
 private [scalalang] class Finally[T](work: => T) {
 
   def _finally(disposal: => Unit): T = {
+    _finally {(ignored) => disposal }
+  }
+
+  def _finally(disposal: (?[Throwable]) => Unit): T = {
     var result: ?[T] = None
     try {
       result = Some(work)
     } catch { case t: Throwable =>
       try {
-        disposal
+        disposal(t)
       } catch { case t2: Throwable =>
-        t.addSuppressed(t2)
+        if (t != t2) t.addSuppressed(t2)
       }
       throw t
     }
-    disposal
+    disposal(None)
     result.get
   }
 }
