@@ -2,11 +2,11 @@ package uk.org.lidalia
 package scalalang
 
 import org.scalatest.FunSuite
-import org.scalatest.mock.MockitoSugar
 import org.scalatest.prop.TableDrivenPropertyChecks
-import uk.org.lidalia.scalalang.ResourceFactory.{_try, usingAll}
+import uk.org.lidalia.scalalang.ResourceFactory.usingAll
+import uk.org.lidalia.scalalang.TryFinally._try
 
-class ResourceFactoryTests extends FunSuite with MockitoSugar with TableDrivenPropertyChecks {
+class ResourceFactoryTests extends FunSuite with TableDrivenPropertyChecks {
 
   object factory extends ResourceFactory[String] {
 
@@ -45,58 +45,6 @@ class ResourceFactoryTests extends FunSuite with MockitoSugar with TableDrivenPr
     assert(factory.closed)
     assert(result === "result")
   }
-
-  test("returns result of work") {
-    val result = _try {
-      "Result"
-    } _finally {
-    }
-    assert(result == "Result")
-  }
-
-  test("throws exception in work") {
-    val workException = new Throwable("Work failed")
-    val thrown = intercept[Throwable] {
-      _try {
-        throw workException
-      } _finally {
-      }
-    }
-    assert(thrown == workException)
-    assert(thrown.getSuppressed.isEmpty)
-    assert(thrown.getCause == null)
-  }
-
-  test("throws exception in disposal") {
-    val disposalException = new Throwable("Disposal failed")
-    val thrown = intercept[Throwable] {
-      _try {
-        "result"
-      } _finally {
-        _throw(disposalException)
-      }
-    }
-    assert(thrown == disposalException)
-    assert(thrown.getSuppressed.isEmpty)
-    assert(thrown.getCause == null)
-  }
-
-  test("suppresses exception in disposal") {
-    val workException = new Throwable("Work failed")
-    val disposalException = new Throwable("Disposal failed")
-    val thrown = intercept[Throwable] {
-      _try {
-        throw workException
-      } _finally {
-        _throw(disposalException)
-      }
-    }
-    assert(thrown == workException)
-    assert(thrown.getSuppressed.toList == List(disposalException))
-    assert(thrown.getCause == null)
-  }
-
-  def _throw(t: Throwable): Unit = throw t
 
   val exceptionCombinations = Table(
     ("on open 1", "on close 1", "on open 2", "on close 2", "expected"          ),

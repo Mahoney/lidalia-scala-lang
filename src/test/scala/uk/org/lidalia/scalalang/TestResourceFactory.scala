@@ -1,6 +1,6 @@
 package uk.org.lidalia.scalalang
 
-import uk.org.lidalia.scalalang.ResourceFactory._try
+import uk.org.lidalia.scalalang.TryFinally._try
 
 class TestResourceFactory(
   var failOnOpen: Boolean = false,

@@ -2,7 +2,7 @@ package uk.org.lidalia.scalalang
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import uk.org.lidalia.scalalang.ResourceFactory._try
+import uk.org.lidalia.scalalang.TryFinally._try
 
 final class Lock {
 

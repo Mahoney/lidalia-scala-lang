@@ -1,6 +1,6 @@
 package uk.org.lidalia.scalalang
 
-import ResourceFactory._try
+import uk.org.lidalia.scalalang.TryFinally._try
 
 case class StubResourceFactory[R] (
   resource: R = "Result",

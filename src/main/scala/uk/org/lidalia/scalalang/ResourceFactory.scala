@@ -2,6 +2,8 @@ package uk.org.lidalia
 package scalalang
 
 import uk.org.lidalia.scalalang.ResourceFactory.usingAll
+import uk.org.lidalia.scalalang.Throwables.suppressed
+import uk.org.lidalia.scalalang.TryFinally._try
 
 import scala.util.Try
 
@@ -15,26 +17,9 @@ object ResourceFactory {
     work: (R1, R2) => T
   ) = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2)
-    val allResources = List(r1, r2)
-    val exceptionsOnOpen = exceptionsOn(allResources) { _() }
-
-    _try {
-      suppressed(exceptionsOnOpen).foreach { throw _ }
-      Some(work(r1(), r2()))
-    } _finally { t: ?[Throwable] =>
-      closeAll(allResources, t)
+    _usingAll(r1, r2) {
+      work(r1(), r2())
     }
-  }
-
-  private def exceptionsOn(allResources: List[ManuallyClosedResource[_]])(action: (ManuallyClosedResource[_]) => Any): List[Throwable] = {
-    allResources.flatMap { r => Try(action(r)).failed.toOption }
-  }
-
-  private def closeAll(allResources: List[ManuallyClosedResource[_]], t: ?[Throwable]): Unit = {
-    allResources.foreach(_.allowToClose())
-    val exceptionsOnClose = exceptionsOn(allResources) { _.awaitClosed() }
-    val allExceptions = t.map { _ :: exceptionsOnClose }.getOrElse(exceptionsOnClose)
-    suppressed(allExceptions).foreach { throw _ }
   }
 
   def usingAll[T, R1, R2, R3](
@@ -43,12 +28,8 @@ object ResourceFactory {
     work: (R1, R2, R3) => T
   ): T = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2); val r3 = ManuallyClosedResource(rf3)
-    _try {
+    _usingAll(r1, r2, r3) {
       work(r1(), r2(), r3())
-    } _finally {
-      val allResources = List(r1, r2, r3)
-      allResources.foreach(_.allowToClose())
-      allResources.foreach(_.awaitClosed())
     }
   }
 
@@ -58,61 +39,37 @@ object ResourceFactory {
     work: (R1, R2, R3, R4) => T
   ): T = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2); val r3 = ManuallyClosedResource(rf3); val r4 = ManuallyClosedResource(rf4)
-    _try {
+    _usingAll(r1, r2, r3, r4) {
       work(r1(), r2(), r3(), r4())
-    } _finally {
-      val allResources = List(r1, r2, r3, r4)
-      allResources.foreach(_.allowToClose())
-      allResources.foreach(_.awaitClosed())
     }
   }
 
-  def usingAll[T, R](factories: ResourceFactory[R]*)(work: List[R] => T) = {
+  def usingAll[T, R](factories: ResourceFactory[R]*)(work: Traversable[R] => T) = {
     val resources = factories.map(ManuallyClosedResource(_))
+    _usingAll(resources:_*) {
+      work(resources.map(_.apply()))
+    }
+  }
+
+  private def _usingAll[T](allResources: ManuallyClosedResource[_]*)(work: => T): T = {
     _try {
-      work(resources.map(_.apply()).toList)
-    } _finally {
-      resources.foreach(_.allowToClose())
-      resources.foreach(_.awaitClosed())
+      val exceptionsOnOpen = exceptionsOn(allResources.toList) { _.apply() }
+      suppressed(exceptionsOnOpen).foreach { throw _ }
+      work
+    } _finally { t: ?[Throwable] =>
+      closeAll(allResources.toList, t)
     }
   }
 
-  def _try[T](work: => T) = new Finally(work)
-
-  def suppressed(throwables: Traversable[Throwable]): ?[Throwable] = {
-    throwables.foldLeft(None: ?[Throwable]) { (primary, throwable) =>
-      primary match {
-        case None =>
-          Some(throwable)
-        case Some(e) =>
-          e.addSuppressed(throwable)
-          primary
-      }
-    }
+  private def exceptionsOn[T](allResources: Traversable[T])(action: (T) => Any) = {
+    allResources.flatMap { r => Try(action(r)).failed.toOption }
   }
 
-}
-
-private [scalalang] class Finally[T](work: => T) {
-
-  def _finally(disposal: => Unit): T = {
-    _finally {(ignored) => disposal }
-  }
-
-  def _finally(disposal: (?[Throwable]) => Unit): T = {
-    var result: ?[T] = None
-    try {
-      result = Some(work)
-    } catch { case t: Throwable =>
-      try {
-        disposal(t)
-      } catch { case t2: Throwable =>
-        if (t != t2) t.addSuppressed(t2)
-      }
-      throw t
-    }
-    disposal(None)
-    result.get
+  private def closeAll(allResources: Traversable[ManuallyClosedResource[_]], t: ?[Throwable]): Unit = {
+    allResources.foreach(_.allowToClose())
+    val exceptionsOnClose = exceptionsOn(allResources) { _.awaitClosed() }
+    val allExceptions = t.map { _ :: exceptionsOnClose.toList }.getOrElse(exceptionsOnClose)
+    suppressed(allExceptions).foreach { throw _ }
   }
 }
 
