@@ -136,3 +136,14 @@ class MultiResourceFactory4[+A, +B, +C, +D](
 class ExistingResourceFactory[+R](existingResource: R) extends ResourceFactory[R] {
   override def using[T](work: (R) => T) = work(existingResource)
 }
+
+class CloseableResourceFactory[+R <: AutoCloseable](builder: () => R) extends ResourceFactory[R] {
+  override def using[T](work: (R) => T): T = {
+    val closeable = builder()
+    _try {
+      work(closeable)
+    } _finally {
+      closeable.close()
+    }
+  }
+}
