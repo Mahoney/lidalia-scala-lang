@@ -44,7 +44,7 @@ object ResourceFactory {
     }
   }
 
-  def usingAll[T, R](factories: ResourceFactory[R]*)(work: Traversable[R] => T) = {
+  def usingAll[T, R](factories: ResourceFactory[R]*)(work: Seq[R] => T) = {
     val resources = factories.map(ManuallyClosedResource(_))
     _usingAll(resources:_*) {
       work(resources.map(_.apply()))
