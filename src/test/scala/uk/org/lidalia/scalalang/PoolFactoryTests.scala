@@ -71,7 +71,8 @@ class PoolFactoryTests extends FunSuite {
 
     poolFactory.using { pool =>
       manualResource = ManuallyClosedResource(pool)
-      capturedResource = manualResource()
+      manualResource.start()
+      capturedResource = manualResource.get()
       assert(capturedResource.open)
     }
 

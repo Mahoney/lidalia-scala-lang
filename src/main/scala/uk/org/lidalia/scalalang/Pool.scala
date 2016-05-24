@@ -39,9 +39,11 @@ class Pool[R <: Reusable] private [scalalang] (
 
       val existingResource = idle.dequeueFirst((x) => true)
 
-      val result = existingResource.getOrElse(
-        ManuallyClosedResource(resourceFactory)
-      )
+      val result = existingResource.getOrElse {
+        val r = ManuallyClosedResource(resourceFactory)
+        r.start()
+        r
+      }
       loaned.add(result)
       result
     }
@@ -51,7 +53,7 @@ class Pool[R <: Reusable] private [scalalang] (
     resourceWrapper: ResourceWrapper
   ) = {
     try {
-      resourceWrapper()
+      resourceWrapper.get()
     } catch { case e: Exception =>
       eject(resourceWrapper, e)
       throw e
@@ -63,7 +65,7 @@ class Pool[R <: Reusable] private [scalalang] (
     resource: ResourceWrapper
   ) = {
     try {
-      work(resource())
+      work(resource.get())
     } catch { case e: Exception =>
       handleError(resource, e)
       throw e
@@ -74,7 +76,7 @@ class Pool[R <: Reusable] private [scalalang] (
     resource: ResourceWrapper
   ) = {
     try {
-      resource().reset()
+      resource.get().reset()
       restore(resource)
     } catch { case e: Exception =>
       eject(resource, e)
@@ -88,9 +90,9 @@ class Pool[R <: Reusable] private [scalalang] (
   ) = {
     try {
 
-      resource().onError(e)
+      resource.get().onError(e)
 
-      if (resource().check == Reusable.BROKEN) {
+      if (resource.get().check == Reusable.BROKEN) {
         eject(resource, e)
       } else {
         restore(resource)
@@ -144,4 +146,6 @@ class Pool[R <: Reusable] private [scalalang] (
     idle.clear()
     loaned.clear()
   }
+
+  override def toString = s"Pool for $resourceFactory"
 }

@@ -6,8 +6,9 @@ class ManuallyClosedResourceTests extends FunSuite {
 
   test("Returns result") {
     val resource = ManuallyClosedResource(new StubResourceFactory())
+    resource.start()
     try {
-      assert(resource() == "Result")
+      assert(resource.get() == "Result")
     } finally {
       resource.close()
     }
@@ -19,8 +20,9 @@ class ManuallyClosedResourceTests extends FunSuite {
     ))
 
     try {
+      resource.start()
       val exception = intercept[RuntimeException] {
-        resource()
+        resource.get()
       }
       assert(exception.getMessage == "on use")
       assert(exception.getSuppressed.isEmpty)
@@ -34,7 +36,8 @@ class ManuallyClosedResourceTests extends FunSuite {
     val resource = ManuallyClosedResource(new StubResourceFactory(
       throwWhenClosed = "on close"
     ))
-    assert(resource() == "Result")
+    resource.start()
+    assert(resource.get() == "Result")
     val exception = intercept[RuntimeException] {
       resource.close()
     }

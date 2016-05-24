@@ -18,7 +18,7 @@ object ResourceFactory {
   ) = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2)
     _usingAll(r1, r2) {
-      work(r1(), r2())
+      work(r1.get(), r2.get())
     }
   }
 
@@ -29,7 +29,7 @@ object ResourceFactory {
   ): T = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2); val r3 = ManuallyClosedResource(rf3)
     _usingAll(r1, r2, r3) {
-      work(r1(), r2(), r3())
+      work(r1.get(), r2.get(), r3.get())
     }
   }
 
@@ -40,20 +40,21 @@ object ResourceFactory {
   ): T = {
     val r1 = ManuallyClosedResource(rf1); val r2 = ManuallyClosedResource(rf2); val r3 = ManuallyClosedResource(rf3); val r4 = ManuallyClosedResource(rf4)
     _usingAll(r1, r2, r3, r4) {
-      work(r1(), r2(), r3(), r4())
+      work(r1.get(), r2.get(), r3.get(), r4.get())
     }
   }
 
   def usingAll[T, R](factories: ResourceFactory[R]*)(work: Seq[R] => T) = {
     val resources = factories.map(ManuallyClosedResource(_))
     _usingAll(resources:_*) {
-      work(resources.map(_.apply()))
+      work(resources.map(_.get()))
     }
   }
 
   private def _usingAll[T](allResources: ManuallyClosedResource[_]*)(work: => T): T = {
     _try {
-      val exceptionsOnOpen = exceptionsOn(allResources.toList) { _.apply() }
+      allResources.foreach(_.start())
+      val exceptionsOnOpen = exceptionsOn(allResources.toList) { _.get() }
       suppressed(exceptionsOnOpen).foreach { throw _ }
       work
     } _finally { t: ?[Throwable] =>
@@ -70,6 +71,19 @@ object ResourceFactory {
     val exceptionsOnClose = exceptionsOn(allResources) { _.awaitClosed() }
     val allExceptions = t.map { _ :: exceptionsOnClose.toList }.getOrElse(exceptionsOnClose)
     suppressed(allExceptions).foreach { throw _ }
+  }
+
+  def usingAllSerial[T, R](factories: ResourceFactory[R]*)(work: Seq[R] => T) = {
+    val allResources = factories.map { factory => ManuallyClosedResource(factory) }
+    _try {
+      val exceptionsOnOpen = exceptionsOn(allResources.toList) { r => r.start(); r.get() }
+      suppressed(exceptionsOnOpen).foreach { throw _ }
+      work(allResources.map(_.get()))
+    } _finally { t: ?[Throwable] =>
+      val exceptionsOnClose = exceptionsOn(allResources.reverse) { _.close() }
+      val allExceptions = t.map { _ :: exceptionsOnClose.toList }.getOrElse(exceptionsOnClose)
+      suppressed(allExceptions).foreach { throw _ }
+    }
   }
 }
 

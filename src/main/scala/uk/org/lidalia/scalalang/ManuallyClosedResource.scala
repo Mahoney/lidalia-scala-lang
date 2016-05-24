@@ -45,9 +45,11 @@ class ManuallyClosedResource[R] private (factory: ResourceFactory[R]) {
     }
   }
 
-  thread.start()
+  def start(): Unit = {
+    thread.start()
+  }
 
-  def apply(): R = {
+  def get(): R = {
     ready.await()
     resource.getOrElse(throw throwable.get)
   }
@@ -55,7 +57,6 @@ class ManuallyClosedResource[R] private (factory: ResourceFactory[R]) {
   def close() {
     allowToClose()
     awaitClosed()
-    if (closeThrowable.isDefined) throw closeThrowable.get
   }
 
   def allowToClose() = closed.countDown()
@@ -65,6 +66,6 @@ class ManuallyClosedResource[R] private (factory: ResourceFactory[R]) {
     if (closeThrowable.isDefined) throw closeThrowable.get
   }
 
-  override def toString = super.toString + '[' + apply + ']'
+  override def toString = super.toString + '[' + get() + ']'
 
 }
