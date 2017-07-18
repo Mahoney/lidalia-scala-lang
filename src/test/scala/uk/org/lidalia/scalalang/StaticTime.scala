@@ -1,9 +1,9 @@
 package uk.org.lidalia.scalalang
 
 import org.joda.time.{DateTimeUtils, Instant}
-import org.scalatest.{Outcome, Suite}
+import org.scalatest.{Outcome, TestSuite}
 
-trait StaticTime extends Suite {
+trait StaticTime extends TestSuite {
 
   val staticTime: Instant
 

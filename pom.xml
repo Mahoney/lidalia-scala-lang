@@ -17,7 +17,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <scala.version>2.11.7</scala.version>
+    <scala.version>2.12.2</scala.version>
   </properties>
 
   <dependencies>
@@ -44,14 +44,14 @@
     <!-- TEST -->
     <dependency>
       <groupId>org.scalacheck</groupId>
-      <artifactId>scalacheck_2.11</artifactId>
-      <version>1.12.5</version>
+      <artifactId>scalacheck_2.12</artifactId>
+      <version>1.13.5</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.scalatest</groupId>
-      <artifactId>scalatest_2.11</artifactId>
-      <version>2.2.5</version>
+      <artifactId>scalatest_2.12</artifactId>
+      <version>3.0.3</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -150,6 +150,4 @@
       </plugin>
     </plugins>
   </build>
-
-
 </project>

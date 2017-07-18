@@ -1,9 +1,9 @@
 package uk.org.lidalia
 package scalalang
 
-import uk.org.lidalia.scalalang.ResourceFactory.usingAll
-import uk.org.lidalia.scalalang.Throwables.suppressed
-import uk.org.lidalia.scalalang.TryFinally._try
+import scalalang.ResourceFactory.usingAll
+import scalalang.Throwables.suppressed
+import scalalang.TryFinally._try
 
 import scala.util.Try
 
@@ -44,7 +44,7 @@ object ResourceFactory {
     }
   }
 
-  def usingAll[T, R](factories: ResourceFactory[R]*)(work: Seq[R] => T) = {
+  def usingAll[T, R](factories: ResourceFactory[R]*)(work: Seq[R] => T): T = {
     val resources = factories.map(ManuallyClosedResource(_))
     _usingAll(resources:_*) {
       work(resources.map(_.get()))
@@ -73,8 +73,8 @@ object ResourceFactory {
     suppressed(allExceptions).foreach { throw _ }
   }
 
-  def usingAllSerial[T, R](factories: ResourceFactory[R]*)(work: Seq[R] => T) = {
-    val allResources = factories.map { factory => ManuallyClosedResource(factory) }
+  def usingAllSerial[T, R](factories: ResourceFactory[R]*)(work: Seq[R] => T): T = {
+    val allResources = factories.map(ManuallyClosedResource(_))
     _try {
       val exceptionsOnOpen = exceptionsOn(allResources.toList) { r => r.start(); r.get() }
       suppressed(exceptionsOnOpen).foreach { throw _ }

@@ -2,9 +2,9 @@ package uk.org.lidalia.scalalang
 
 import java.util.Locale
 
-import org.scalatest.{Outcome, Suite}
+import org.scalatest.{Outcome, TestSuite}
 
-trait DefaultLocale extends Suite {
+trait DefaultLocale extends TestSuite {
 
   val defaultLocale: Locale
 
