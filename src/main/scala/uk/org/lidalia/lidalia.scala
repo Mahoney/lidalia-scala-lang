@@ -7,7 +7,7 @@ package object lidalia {
 
   type Identity = lang.Identity @field
 
-  type ?[T] = Option[T]
+  type ?[+T] = Option[T]
 
   implicit def instanceToSome[T](instance: T): Some[T] = Some(instance)
   implicit def someToInstance[T](some: Some[T]): T = some.get

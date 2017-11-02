@@ -147,7 +147,11 @@ class MultiResourceFactory4[+A, +B, +C, +D](
   }
 }
 
-class ExistingResourceFactory[+R](existingResource: R) extends ResourceFactory[R] {
+object ExistingResourceFactory {
+  def apply[R](existingResource: R) = new ExistingResourceFactory(existingResource)
+}
+
+class ExistingResourceFactory[+R] private (existingResource: R) extends ResourceFactory[R] {
   override def using[T](work: (R) => T) = work(existingResource)
 }
 
